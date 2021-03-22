@@ -14,26 +14,24 @@
 /// @cond HIDDEN_SYMBOLS
 
 #include "N9H30.h"
-#include "sys.h"
-
 
 /*----------------------------------------------------------------------------------------*/
 /*   Hardware settings                                                                    */
 /*----------------------------------------------------------------------------------------*/
-#define HCLK_MHZ               300          /* used for loop-delay. must be larger than 
-                                               true HCLK clock MHz                        */
+#define HCLK_MHZ               0            /* Not used for Original Xbox                 */
 
-#define NON_CACHE_MASK         (0x80000000)
+#define NON_CACHE_MASK         0
 
-#define ENABLE_OHCI_IRQ()      sysEnableInterrupt(OHCI_IRQn)
-#define DISABLE_OHCI_IRQ()     sysDisableInterrupt(OHCI_IRQn)
-#define IS_OHCI_IRQ_ENABLED()  ((inpw(REG_AIC_IMR)>>OHCI_IRQn) & 0x1)
-#define ENABLE_EHCI_IRQ()      sysEnableInterrupt(EHCI_IRQn)
-#define DISABLE_EHCI_IRQ()     sysDisableInterrupt(EHCI_IRQn)
-#define IS_EHCI_IRQ_ENABLED()  ((inpw(REG_AIC_IMR)>>EHCI_IRQn) & 0x1)
+#define USB_IRQ 1
+#define ENABLE_OHCI_IRQ()      _ohci->HcInterruptEnable |= USBH_HcInterruptEnable_MIE_Msk
+#define DISABLE_OHCI_IRQ()     _ohci->HcInterruptDisable = USBH_HcInterruptDisable_MIE_Msk
+#define IS_OHCI_IRQ_ENABLED()  ((_ohci->HcInterruptEnable & USBH_HcInterruptEnable_MIE_Msk) !=0)
+#define ENABLE_EHCI_IRQ()
+#define DISABLE_EHCI_IRQ()
+#define IS_EHCI_IRQ_ENABLED()  0
 
 #define ENABLE_OHCI                         /* Enable OHCI host controller                */
-#define ENABLE_EHCI                         /* Enable EHCI host controller                */
+//#define ENABLE_EHCI                         /* Enable EHCI host controller                */
 
 #define EHCI_PORT_CNT          2            /* Number of EHCI roothub ports               */
 #define OHCI_PORT_CNT          2            /* Number of OHCI roothub ports               */
@@ -72,7 +70,10 @@
    May allocate one or more units depend on hardware descriptor type.                                 */
 
 #define MEM_POOL_UNIT_SIZE     128     /*!< A fixed hard coding setting. Do not change it!            */
-#define MEM_POOL_UNIT_NUM      256     /*!< Increase this or heap size if memory allocate failed.     */
+#ifndef MEM_POOL_UNIT_NUM
+//Four S controllers with their internal hub use about 50 'units'. Roughly double it for safe measure
+#define MEM_POOL_UNIT_NUM      96      /*!< Increase this or heap size if memory allocate failed.     */
+#endif
 
 /*----------------------------------------------------------------------------------------*/
 /*   Re-defined staff for various compiler                                                */
@@ -85,8 +86,8 @@
 /*----------------------------------------------------------------------------------------*/
 /*   Debug settings                                                                       */
 /*----------------------------------------------------------------------------------------*/
-#define ENABLE_ERROR_MSG                    /* enable debug messages                      */
-#define ENABLE_DEBUG_MSG                    /* enable debug messages                      */
+//#define ENABLE_ERROR_MSG                    /* enable debug messages                      */
+//#define ENABLE_DEBUG_MSG                    /* enable debug messages                      */
 //#define ENABLE_VERBOSE_DEBUG              /* verbos debug messages                      */
 //#define DUMP_DESCRIPTOR                   /* dump descriptors                           */
 
@@ -1510,8 +1511,8 @@ typedef struct
 /**@}*/ /* HSUSBH_CONST */
 /**@}*/ /* end of HSUSBH register group */
 
-#define USBH                 ((USBH_T *)0xB0007000)
-#define HSUSBH               ((HSUSBH_T *)0xB0005000)
+#define USBH                 ((USBH_T *)0xFED00000)
+#define HSUSBH               ((HSUSBH_T *)NULL)
 
 
 /// @endcond /*HIDDEN_SYMBOLS*/
