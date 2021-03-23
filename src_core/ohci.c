@@ -215,8 +215,8 @@ static int  ohci_init(void)
 
     _ohci->HcInterruptEnable = USBH_HcInterruptEnable_MIE_Msk | USBH_HcInterruptEnable_WDH_Msk | USBH_HcInterruptEnable_SF_Msk;
 
-    /* POTPGT delay is bits 24-31, in 20 ms units.                                         */
-    delay_us(20000);
+    /* POTPGT delay is bits 24-31, in 2 ms units. */
+    delay_us((_ohci->HcRhDescriptorA >> 23 & 0x1FE) * 1000);
     return 0;
 }
 
