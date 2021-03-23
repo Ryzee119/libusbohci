@@ -32,12 +32,17 @@ static CDC_DEV_T *alloc_cdc_device(void)
         return NULL;
 
     memset((char *)cdev, 0, sizeof(CDC_DEV_T));
+    cdev->sts_buff = usbh_alloc_mem(CDC_STATUS_BUFF_SIZE);
+    cdev->rx_buff = usbh_alloc_mem(CDC_RX_BUFF_SIZE);
+
     cdev->ifnum_data = -1;
     return cdev;
 }
 
 void  free_cdc_device(CDC_DEV_T *cdev)
 {
+    usbh_free_mem(cdev->sts_buff, CDC_STATUS_BUFF_SIZE);
+    usbh_free_mem(cdev->rx_buff, CDC_RX_BUFF_SIZE);
     usbh_free_mem(cdev, sizeof(CDC_DEV_T));
 }
 
