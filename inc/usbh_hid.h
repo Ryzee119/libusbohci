@@ -65,6 +65,9 @@ extern "C"
   @{
 */
 
+typedef enum {UNKNOWN = 0, GENERIC, XBOXONE, XBOX360_WIRELESS, XBOX360_WIRED,
+              XBOXOG_CONTROLLER, XBOXOG_STEELBATTALION, XBOXOG_XIR} hidtype_t;
+
 /*---------------------------------------------------------------------------------------------*/
 /*  HID device                                                                                 */
 /*---------------------------------------------------------------------------------------------*/
@@ -82,6 +85,8 @@ typedef struct usbhid_dev
     void          *iface;               /*!< This HID interface                                */
     uint32_t      uid;                  /*!< The unique ID to identify a HID device.           */
     struct usbhid_dev   *next;          /*!< Point to the next HID device                      */
+    hidtype_t type;                     /*!< Type of HID device. Generic HID or vendor specific*/
+    void *user_data;                    /*!< Pointer to an optional user struct                */
 } HID_DEV_T;                            /*! HID device structure                               */
 
 /*@}*/ /* end of group N9H30_USBH_EXPORTED_STRUCTURES */
