@@ -1150,6 +1150,12 @@ static void remove_ed()
     }
 }
 
+void OHCI_IRQ(void)
+{
+    //This happens under a IRQ context. OHCI_IRQHandler() is called
+    //immediately after via DPCs to allow other system interrupts.
+    DISABLE_OHCI_IRQ();
+}
 
 //static irqreturn_t ohci_irq (struct usb_hcd *hcd)
 void OHCI_IRQHandler(void)
@@ -1211,6 +1217,7 @@ void OHCI_IRQHandler(void)
     }
 
     _ohci->HcInterruptStatus = int_sts;
+    ENABLE_OHCI_IRQ();
 }
 
 #ifdef ENABLE_DEBUG_MSG

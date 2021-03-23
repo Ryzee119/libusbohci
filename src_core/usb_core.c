@@ -13,6 +13,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <xboxkrnl/xboxkrnl.h>
 
 #include "usb.h"
 #include "hub.h"
@@ -30,10 +31,28 @@ static CONN_FUNC  *g_conn_func, *g_disconn_func;
 
 extern void EHCI_IRQHandler(void);
 extern void OHCI_IRQHandler(void);
+extern void OHCI_IRQ(void);
 
 
 /// @endcond HIDDEN_SYMBOLS
 
+static KINTERRUPT InterruptObject;
+static KDPC DPCObject;
+static BOOLEAN __stdcall ISR(PKINTERRUPT Interrupt, PVOID ServiceContext)
+{
+    OHCI_IRQ();
+    KeInsertQueueDpc(&DPCObject,NULL,NULL);
+    return TRUE;
+}
+
+static void __stdcall DPC(PKDPC Dpc,
+                          PVOID DeferredContext,
+                          PVOID SystemArgument1,
+                          PVOID SystemArgument2)
+{
+    OHCI_IRQHandler();
+    return;
+}
 
 /**
   * @brief       Initialize N9H30 USB Host controller and USB stack.
@@ -51,8 +70,6 @@ void  usbh_core_init()
     DISABLE_EHCI_IRQ();
     DISABLE_OHCI_IRQ();
 
-    _ohci = USBH;
-    _ehci = HSUSBH;
 
     memset(_drivers, 0, sizeof(_drivers));
 
@@ -61,17 +78,25 @@ void  usbh_core_init()
 
     usbh_hub_init();
 
-    _ehci->USBPCR0 = 0x160;                /* enable PHY 0          */
-    _ehci->USBPCR1 = 0x520;                /* enable PHY 1          */
     usbh_memory_init();
 
     //_ohci->HcMiscControl |= USBH_HcMiscControl_OCAL_Msk; /* Over-current active low  */
     _ohci->HcMiscControl &= ~USBH_HcMiscControl_OCAL_Msk; /* Over-current active high  */
 
 #ifdef ENABLE_OHCI
-    sysInstallISR(HIGH_LEVEL_SENSITIVE | IRQ_LEVEL_1, OHCI_IRQn, (PVOID)OHCI_IRQHandler);
     ohci_driver.init();
     ENABLE_OHCI_IRQ();
+    KIRQL irql;
+    ULONG vector = HalGetInterruptVector(USB_IRQ, &irql);
+    KeInitializeDpc(&DPCObject,&DPC,NULL);
+    KeInitializeInterrupt(&InterruptObject,
+                          &ISR,
+                          NULL,
+                          vector,
+                          irql,
+                          LevelSensitive,
+                          FALSE);
+    KeConnectInterrupt(&InterruptObject);
 #endif
 
 #ifdef ENABLE_EHCI
@@ -79,10 +104,6 @@ void  usbh_core_init()
     ehci_driver.init();
     ENABLE_EHCI_IRQ();
 #endif
-
-    sysFlushCache(I_D_CACHE);
-
-    sysSetLocalInterrupt(ENABLE_IRQ);   /* enable CPSR I bit */
 }
 
 void  usbh_core_deinit()
@@ -364,7 +385,6 @@ int usbh_bulk_xfer(UTR_T *utr)
   */
 int usbh_int_xfer(UTR_T *utr)
 {
-    sysFlushCache(I_D_CACHE);
     return utr->udev->hc_driver->int_xfer(utr);
 }
 
