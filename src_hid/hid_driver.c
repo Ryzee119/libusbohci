@@ -92,6 +92,7 @@ static int hid_probe(IFACE_T *iface)
     hdev->bSubClassCode = ifd->bInterfaceSubClass;
     hdev->bProtocolCode = ifd->bInterfaceProtocol;
     hdev->next = NULL;
+    hdev->user_data = NULL;
     iface->context = (void *)hdev;
 
     /*

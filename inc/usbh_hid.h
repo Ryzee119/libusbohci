@@ -82,6 +82,7 @@ typedef struct usbhid_dev
     void          *iface;               /*!< This HID interface                                */
     uint32_t      uid;                  /*!< The unique ID to identify a HID device.           */
     struct usbhid_dev   *next;          /*!< Point to the next HID device                      */
+    void *user_data;                    /*!< Pointer to an optional user struct                */
 } HID_DEV_T;                            /*! HID device structure                               */
 
 /*@}*/ /* end of group N9H30_USBH_EXPORTED_STRUCTURES */
