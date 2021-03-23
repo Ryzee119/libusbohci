@@ -182,8 +182,8 @@ typedef struct cdc_dev_t
     EP_INFO_T           *ep_tx;
     UTR_T               *utr_sts;       /* Interrupt in URB                                   */
     UTR_T               *utr_rx;        /* Bulk in URB                                        */
-    uint32_t            sts_buff[CDC_STATUS_BUFF_SIZE/4];
-    uint32_t            rx_buff[CDC_RX_BUFF_SIZE/4];
+    uint8_t             *sts_buff;
+    uint8_t             *rx_buff;
     CDC_CB_FUNC         *sts_func;      /* Interrupt in data received callback                */
     CDC_CB_FUNC         *rx_func;       /* Bulk in data received callabck                     */
     uint8_t             rx_busy;        /* Bulk in transfer is on going                       */
