@@ -160,6 +160,30 @@ typedef enum image_format_e
   @{
 */
 
+/*----------------------------------------------------------------------------------------*/
+/*   User exported functions (Must be created by user application)                        */
+/*----------------------------------------------------------------------------------------*/
+//Initialise/Uninitialise the systems ohci irq and irq handler.
+void usbh_ohci_irq_init(void);
+void usbh_ohci_irq_deinit(void);
+//Initialise/Uninitialise the systems ehci irq and irq handler.
+void usbh_ehci_irq_init(void);
+void usbh_ehci_irq_deinit(void);
+//Allocate a contiguous memory pool that the ohci hardware can access.
+void *usbh_allocate_memory_pool(uint32_t size, uint32_t boundary);
+//Free a contigious memory pool
+void *usbh_free_memory_pool(void *memory_pool);
+//Return the system tick count in 10ms blocks
+uint32_t usbh_get_ticks(void);
+//Pause execution for the required number of micrseconds.
+void usbh_delay_us(int usec);
+//Convert a virtual address from the memory pool to a DMAable physical address.
+void *usbh_dma_to_virt(void *physical_address);
+//Convert a physical address from the ohci hardware to a virtual address.
+void *usbh_virt_to_dma(void *virtual_address);
+//Debug printer output.
+void usbh_sysprintf(const char *format, ...);
+
 /*------------------------------------------------------------------*/
 /*                                                                  */
 /*  USB Core Library APIs                                           */

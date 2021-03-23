@@ -13,6 +13,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <assert.h>
+#include <stdarg.h>
 
 #include "usb.h"
 
@@ -314,6 +316,39 @@ void  USB_free(void *alloc_addr)
     if (disable_ehci_irq)
         ENABLE_EHCI_IRQ();
     return;
+}
+
+//Tick in 10ms blocks
+uint32_t get_ticks(void)
+{
+    return usbh_get_ticks();
+}
+
+void delay_us(int usec)
+{
+    usbh_delay_us(usec);
+}
+
+void *dma_to_virt(void *physical_address)
+{
+    return usbh_dma_to_virt(physical_address);
+}
+
+void *virt_to_dma(void *virtual_address)
+{
+    return usbh_virt_to_dma(virtual_address);
+}
+
+void sysprintf(const char *format, ...)
+{
+#ifdef ENABLE_DEBUG_MSG
+    char buffer[512];
+    va_list argList;
+    va_start(argList, format);
+    vsnprintf(buffer, sizeof(buffer), format, argList);
+    va_end(argList);
+    usbh_sysprintf(buffer);
+#endif
 }
 
 

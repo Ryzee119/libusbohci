@@ -54,29 +54,23 @@ void  usbh_core_init()
     g_disconn_func = NULL;
 
     usbh_hub_init();
-
-    _ehci->USBPCR0 = 0x160;                /* enable PHY 0          */
-    _ehci->USBPCR1 = 0x520;                /* enable PHY 1          */
     usbh_memory_init();
 
     //_ohci->HcMiscControl |= USBH_HcMiscControl_OCAL_Msk; /* Over-current active low  */
     _ohci->HcMiscControl &= ~USBH_HcMiscControl_OCAL_Msk; /* Over-current active high  */
 
 #ifdef ENABLE_OHCI
-    sysInstallISR(HIGH_LEVEL_SENSITIVE | IRQ_LEVEL_1, OHCI_IRQn, (PVOID)OHCI_IRQHandler);
+    usbh_ohci_irq_init();
     ohci_driver.init();
     ENABLE_OHCI_IRQ();
 #endif
 
 #ifdef ENABLE_EHCI
-    sysInstallISR(HIGH_LEVEL_SENSITIVE | IRQ_LEVEL_1, EHCI_IRQn, (PVOID)EHCI_IRQHandler);
+    usbh_ehci_irq_init();
     ehci_driver.init();
     ENABLE_EHCI_IRQ();
 #endif
 
-    sysFlushCache(I_D_CACHE);
-
-    sysSetLocalInterrupt(ENABLE_IRQ);   /* enable CPSR I bit */
 }
 
 /**
@@ -335,7 +329,6 @@ int usbh_bulk_xfer(UTR_T *utr)
   */
 int usbh_int_xfer(UTR_T *utr)
 {
-    sysFlushCache(I_D_CACHE);
     return utr->udev->hc_driver->int_xfer(utr);
 }
 

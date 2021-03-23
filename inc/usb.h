@@ -19,6 +19,11 @@
 #include "ehci.h"
 #include "ohci.h"
 
+#ifdef __cplusplus
+extern "C"
+{
+#endif
+
 /// @cond HIDDEN_SYMBOLS
 
 #define   __I     volatile const       /*!< Defines 'read only' permissions */
@@ -1724,6 +1729,9 @@ extern volatile int _IsInUsbInterrupt;
 /*  USB stack exported functions                                                    */
 /*----------------------------------------------------------------------------------*/
 extern void delay_us(int usec);
+extern void sysprintf(const char *format, ...);
+extern void *dma_to_virt(void *physical_address);
+extern void *virt_to_dma(void *virtual_address);
 
 extern void dump_ohci_regs(void);
 extern void dump_ohci_ports(void);
@@ -1795,5 +1803,9 @@ extern int usbh_quit_xfer(UDEV_T *udev, EP_INFO_T *ep);
 
 
 /// @endcond HIDDEN_SYMBOLS
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif  /* _USBH_H_ */
