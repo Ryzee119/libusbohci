@@ -34,7 +34,7 @@
 //#define ENABLE_EHCI                         /* Enable EHCI host controller                */
 
 #define EHCI_PORT_CNT          2            /* Number of EHCI roothub ports               */
-#define OHCI_PORT_CNT          2            /* Number of OHCI roothub ports               */
+#define OHCI_PORT_CNT          4            /* Number of OHCI roothub ports               */
 //#define OHCI_PER_PORT_POWER               /* OHCI root hub per port powered             */
 
 #define OHCI_ISO_DELAY         4            /* preserved number frames while scheduling 
@@ -656,7 +656,7 @@ typedef struct
     __IO uint32_t HcRhDescriptorA;       /*!< [0x0048] Host Controller Root Hub Descriptor A Register                   */
     __IO uint32_t HcRhDescriptorB;       /*!< [0x004c] Host Controller Root Hub Descriptor B Register                   */
     __IO uint32_t HcRhStatus;            /*!< [0x0050] Host Controller Root Hub Status Register                         */
-    __IO uint32_t HcRhPortStatus[2];     /*!< [0x0054] Host Controller Root Hub Port Status [1]                         */
+    __IO uint32_t HcRhPortStatus[OHCI_PORT_CNT];     /*!< [0x0054] Host Controller Root Hub Port Status [1]                         */
     __I  uint32_t RESERVE0[105];
     __IO uint32_t HcPhyControl;          /*!< [0x0200] Host Controller PHY Control Register                             */
     __IO uint32_t HcMiscControl;         /*!< [0x0204] Host Controller Miscellaneous Control Register                   */

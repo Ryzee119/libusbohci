@@ -204,8 +204,10 @@ static int  ohci_init(void)
 
 #ifdef OHCI_PER_PORT_POWER
     _ohci->HcRhDescriptorB = 0x60000;
-    _ohci->HcRhPortStatus[0] = USBH_HcRhPortStatus_PPS_Msk;
-    _ohci->HcRhPortStatus[1] = USBH_HcRhPortStatus_PPS_Msk;
+    for (int i = 0; i < OHCI_PORT_CNT; i++)
+    {
+        _ohci->HcRhPortStatus[i] = USBH_HcRhPortStatus_PPS_Msk;
+    }
 #else
     _ohci->HcRhDescriptorA = (USBH->HcRhDescriptorA | (1<<9)) & ~USBH_HcRhDescriptorA_PSM_Msk;
     _ohci->HcRhStatus = USBH_HcRhStatus_LPSC_Msk;
@@ -221,11 +223,11 @@ static int  ohci_init(void)
 static void ohci_suspend(void)
 {
     /* set port suspend if connected */
-    if (_ohci->HcRhPortStatus[0] & 0x1)
-        _ohci->HcRhPortStatus[0] = 0x4;
-
-    if (_ohci->HcRhPortStatus[1] & 0x1)
-        _ohci->HcRhPortStatus[1] = 0x4;
+    for (int i = 0; i < OHCI_PORT_CNT; i++)
+    {
+        if (_ohci->HcRhPortStatus[i] & 0x1)
+            _ohci->HcRhPortStatus[i] = 0x4;
+    }
 
     /* enable Device Remote Wakeup */
     _ohci->HcRhStatus |= USBH_HcRhStatus_DRWE_Msk;
@@ -242,10 +244,11 @@ static void ohci_resume(void)
     _ohci->HcControl = (USBH->HcControl & ~USBH_HcControl_HCFS_Msk) | (1 << USBH_HcControl_HCFS_Pos);
     _ohci->HcControl = (USBH->HcControl & ~USBH_HcControl_HCFS_Msk) | (2 << USBH_HcControl_HCFS_Pos);
 
-    if (_ohci->HcRhPortStatus[0] & 0x4)
-        _ohci->HcRhPortStatus[0] = 0x8;
-    if (_ohci->HcRhPortStatus[1] & 0x4)
-        _ohci->HcRhPortStatus[1] = 0x8;
+    for (int i = 0; i < OHCI_PORT_CNT; i++)
+    {
+        if (_ohci->HcRhPortStatus[i] & 0x4)
+            _ohci->HcRhPortStatus[i] = 0x8;
+    }
 }
 
 static void ohci_shutdown(void)
@@ -864,7 +867,7 @@ static int ohci_rh_polling(void)
     UDEV_T    *udev;
     int       ret;
 
-    for (i = 0; i < 2; i++)
+    for (i = 0; i < OHCI_PORT_CNT; i++)
     {
         /* clear unwanted port change status */
         _ohci->HcRhPortStatus[i] = USBH_HcRhPortStatus_OCIC_Msk | USBH_HcRhPortStatus_PRSC_Msk |
@@ -1258,8 +1261,10 @@ void dump_ohci_regs()
     USB_debug("    HcRhDescriptorA    = 0x%x\n", _ohci->HcRhDescriptorA);
     USB_debug("    HcRhDescriptorB    = 0x%x\n", _ohci->HcRhDescriptorB);
     USB_debug("    HcRhStatus         = 0x%x\n", _ohci->HcRhStatus);
-    USB_debug("    HcRhPortStatus0    = 0x%x\n", _ohci->HcRhPortStatus[0]);
-    USB_debug("    HcRhPortStatus1    = 0x%x\n", _ohci->HcRhPortStatus[1]);
+    for (int i = 0; i < OHCI_PORT_CNT; i++)
+    {
+        USB_debug("    HcRhPortStatus0    = 0x%x\n", _ohci->HcRhPortStatus[i]);
+    }
     USB_debug("    HcPhyControl       = 0x%x\n", _ohci->HcPhyControl);
     USB_debug("    HcMiscControl      = 0x%x\n", _ohci->HcMiscControl);
 }
