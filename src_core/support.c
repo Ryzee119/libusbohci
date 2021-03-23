@@ -13,13 +13,17 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <assert.h>
+#include <xboxkrnl/xboxkrnl.h>
 
 #include "usb.h"
 
 /// @cond HIDDEN_SYMBOLS
 
-
-#define  USB_MEMORY_POOL_SIZE   (32*1024)
+#ifndef USB_MEMORY_POOL_SIZE
+//USB library with four S controllers with their internal hubs use about 59kB. Set to 128kB
+#define  USB_MEMORY_POOL_SIZE   (128*1024)
+#endif
 #define  USB_MEM_BLOCK_SIZE     128
 
 #define  BOUNDARY_WORD          4
@@ -39,7 +43,7 @@ typedef struct USB_mhdr
     uint32_t  reserved;
 }  USB_MHDR_T;
 
-uint8_t  _USBMemoryPool[USB_MEMORY_POOL_SIZE] __attribute__((aligned(USB_MEM_BLOCK_SIZE)));
+uint8_t  *_USBMemoryPool;
 
 
 static USB_MHDR_T  *_pCurrent;
@@ -50,6 +54,12 @@ static uint32_t  _MemoryPoolBase, _MemoryPoolEnd;
 
 void  USB_InitializeMemoryPool()
 {
+    _USBMemoryPool = MmAllocateContiguousMemoryEx(USB_MEMORY_POOL_SIZE,
+                                                  0,
+                                                  64 * 1024 * 1024,
+                                                  USB_MEM_BLOCK_SIZE,
+                                                  PAGE_READWRITE | PAGE_NOCACHE);
+    assert(_USBMemoryPool != NULL);
     _MemoryPoolBase = (UINT32)&_USBMemoryPool[0] | NON_CACHE_MASK;
     _MemoryPoolEnd = _MemoryPoolBase + USB_MEMORY_POOL_SIZE;
     _FreeMemorySize = _MemoryPoolEnd - _MemoryPoolBase;
@@ -219,6 +229,7 @@ void  *USB_malloc(INT wanted_size, INT boundary)
     while ((wrap == 0) || (_pCurrent < pPrimitivePos));
 
     sysprintf("USB_malloc - No free memory!\n");
+    assert(0);
     if (disable_ohci_irq)
         ENABLE_OHCI_IRQ();
     if (disable_ehci_irq)

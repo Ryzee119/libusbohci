@@ -13,6 +13,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <assert.h>
+#include <xboxkrnl/xboxkrnl.h>
 
 #include "usb.h"
 
@@ -27,12 +29,7 @@
 #define mem_debug(...)
 #endif
 
-#ifdef __ICCARM__
-#pragma data_alignment=1024
-uint8_t  _mem_pool_buff[MEM_POOL_UNIT_NUM][MEM_POOL_UNIT_SIZE];
-#else
-uint8_t _mem_pool_buff[MEM_POOL_UNIT_NUM][MEM_POOL_UNIT_SIZE] __attribute__((aligned(1024)));
-#endif
+uint32_t *_mem_pool_buff;
 
 static uint8_t * _mem_pool[MEM_POOL_UNIT_NUM];
 static uint8_t  _unit_used[MEM_POOL_UNIT_NUM];
@@ -69,10 +66,17 @@ void usbh_memory_init(void)
         while (1);
     }
 
+    _mem_pool_buff = MmAllocateContiguousMemoryEx(MEM_POOL_UNIT_SIZE * MEM_POOL_UNIT_NUM,
+                                                  0,
+                                                  64 * 1024 * 1024,
+                                                  1024,
+                                                  PAGE_READWRITE | PAGE_NOCACHE);
+    assert(_mem_pool_buff != NULL);
+
     for (i = 0; i < MEM_POOL_UNIT_NUM; i++)
     {
         _unit_used[i] = 0;
-        _mem_pool[i] = (uint8_t *)((uint32_t)&_mem_pool_buff[i] | NON_CACHE_MASK);
+        _mem_pool[i] = (uint8_t *)((uint32_t)_mem_pool_buff + (i * MEM_POOL_UNIT_SIZE));
     }
 
     _usbh_mem_used = 0L;
@@ -91,7 +95,10 @@ void usbh_memory_init(void)
 
 uint32_t  usbh_memory_used(void)
 {
-    sysprintf("USB static memory: %d/%d, heap used: %d\n", _mem_pool_used, MEM_POOL_UNIT_NUM, _usbh_mem_used);
+    sysprintf("USB ED and TDs slots: %d/%d, heap used: %d, heap available: %d\n", _mem_pool_used,
+                                                                                    MEM_POOL_UNIT_NUM,
+                                                                                    _usbh_mem_used,
+                                                                                    USB_available_memory());
     return _usbh_mem_used;
 }
 
@@ -262,6 +269,7 @@ ED_T * alloc_ohci_ED(void)
         }
     }
     USB_error("alloc_ohci_ED failed!\n");
+    assert(0);
     return NULL;
 }
 
@@ -305,6 +313,7 @@ TD_T * alloc_ohci_TD(UTR_T *utr)
         }
     }
     USB_error("alloc_ohci_TD failed!\n");
+    assert(0);
     return NULL;
 }
 
