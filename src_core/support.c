@@ -21,8 +21,9 @@
 /// @cond HIDDEN_SYMBOLS
 
 
-#define  USB_MEMORY_POOL_SIZE   (32*1024)
-#define  USB_MEM_BLOCK_SIZE     128
+#ifndef USB_MEM_BLOCK_SIZE
+#define USB_MEM_BLOCK_SIZE 4096
+#endif
 
 #define  BOUNDARY_WORD          4
 
@@ -41,7 +42,7 @@ typedef struct USB_mhdr
     uint32_t  reserved;
 }  USB_MHDR_T;
 
-uint8_t  _USBMemoryPool[USB_MEMORY_POOL_SIZE] __attribute__((aligned(USB_MEM_BLOCK_SIZE)));
+uint8_t  *_USBMemoryPool;
 
 
 static USB_MHDR_T  *_pCurrent;
@@ -52,6 +53,8 @@ static uint32_t  _MemoryPoolBase, _MemoryPoolEnd;
 
 void  USB_InitializeMemoryPool()
 {
+    _USBMemoryPool = usbh_allocate_memory_pool(USB_MEMORY_POOL_SIZE, USB_MEM_BLOCK_SIZE);
+    assert(_USBMemoryPool != NULL);
     _MemoryPoolBase = (UINT32)&_USBMemoryPool[0] | NON_CACHE_MASK;
     _MemoryPoolEnd = _MemoryPoolBase + USB_MEMORY_POOL_SIZE;
     _FreeMemorySize = _MemoryPoolEnd - _MemoryPoolBase;
@@ -221,6 +224,7 @@ void  *USB_malloc(INT wanted_size, INT boundary)
     while ((wrap == 0) || (_pCurrent < pPrimitivePos));
 
     sysprintf("USB_malloc - No free memory!\n");
+    assert(0);
     if (disable_ohci_irq)
         ENABLE_OHCI_IRQ();
     if (disable_ehci_irq)
