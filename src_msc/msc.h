@@ -16,7 +16,7 @@
 #endif
 
 
-#define USBDRV_0                  3      /* FATFS assigned USB disk drive volumn number base   */
+#define USBDRV_0                  0      /* FATFS assigned USB disk drive volumn number base   */
 #define USBDRV_MAX                9      /* FATFS assigned USB disk drive volumn number end    */
 #define USBDRV_CNT                (USBDRV_MAX - USBDRV_0 + 1)
 
@@ -93,7 +93,7 @@ typedef struct msc_t
     uint8_t     root;                    /* root instance?                                */
     struct bulk_cb_wrap  cmd_blk;        /* MSC Bulk-only command block                   */
     struct bulk_cs_wrap  cmd_status;     /* MSC Bulk-only command status                  */
-    uint8_t     scsi_buff[SCSI_BUFF_LEN];/* buffer for SCSI commands                      */
+    uint8_t     *scsi_buff;              /* buffer for SCSI commands                      */
     uint32_t    uTotalSectorN;
     uint32_t    nSectorSize;
     uint32_t    uDiskSize;

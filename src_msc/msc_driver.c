@@ -17,6 +17,7 @@
 #include "N9H30.h"
 #include "diskio.h"                // FATFS header
 #include "usb.h"
+#include "usbh_lib.h"
 #include "msc.h"
 #include "ff.h"
 #include "diskio.h"
@@ -114,11 +115,11 @@ static void get_max_lun(MSC_T *msc)
 {
     UDEV_T    *udev = msc->iface->udev;
     uint32_t  read_len;
-    uint8_t   buff[2], *nbuff;
+    uint8_t   *nbuff;
     int       ret;
 
     msc->max_lun = 0;
-    nbuff = (uint8_t *)((uint32_t)buff | NON_CACHE_MASK);
+    nbuff = usbh_alloc_mem(2);
 
     /*------------------------------------------------------------------------------------*/
     /* Issue GET MAXLUN MSC class command to get the maximum lun number                   */
@@ -135,6 +136,7 @@ static void get_max_lun(MSC_T *msc)
     }
     msc->max_lun = nbuff[0];
     msc_debug_msg("Max lun is %d\n", msc->max_lun);
+    usbh_free_mem(nbuff, 2);
 }
 
 void msc_reset(MSC_T *msc)
@@ -171,7 +173,7 @@ static int  msc_inquiry(MSC_T *msc)
     cmd_blk->CDB[1]  = msc->lun << 5;
     cmd_blk->CDB[4]  = 36;
 
-    scsi_buff = (uint8_t *)((uint32_t)msc->scsi_buff | NON_CACHE_MASK);
+    scsi_buff = msc->scsi_buff;
     ret = run_scsi_command(msc, scsi_buff, 36, 1, 100);
     if (ret < 0)
     {
@@ -200,7 +202,7 @@ static int  msc_request_sense(MSC_T *msc)
     cmd_blk->CDB[1]  = msc->lun << 5;
     cmd_blk->CDB[4]  = 18;
 
-    scsi_buff = (uint8_t *)((uint32_t)msc->scsi_buff | NON_CACHE_MASK);
+    scsi_buff = msc->scsi_buff;
     ret = run_scsi_command(msc, scsi_buff, 18, 1, 100);
     if (ret < 0)
     {
@@ -565,6 +567,11 @@ static int msc_probe(IFACE_T *iface)
     msc = (MSC_T *)usbh_alloc_mem(sizeof(*msc));
     if (msc == NULL)
         return USBH_ERR_MEMORY_OUT;
+
+    msc->scsi_buff = usbh_alloc_mem(SCSI_BUFF_LEN);
+    if (msc->scsi_buff == NULL)
+        return USBH_ERR_MEMORY_OUT;
+
     msc->uid = get_ticks();
 
     /* Find the bulk in and out endpoints */
@@ -581,6 +588,7 @@ static int msc_probe(IFACE_T *iface)
 
     if ((msc->ep_bulk_in == NULL) || (msc->ep_bulk_out == NULL))
     {
+        usbh_free_mem(msc->scsi_buff, SCSI_BUFF_LEN);
         usbh_free_mem(msc, sizeof(*msc));
         return USBH_ERR_NOT_EXPECTED;
     }
@@ -619,6 +627,8 @@ static void msc_disconnect(IFACE_T *iface)
         {
             fatfs_drive_free(msc->drv_no);
             msc_list_remove(msc);
+            if (msc->scsi_buff)
+                usbh_free_mem(msc->scsi_buff, SCSI_BUFF_LEN);
             usbh_free_mem(msc, sizeof(*msc));
         }
         msc = msc_p;
