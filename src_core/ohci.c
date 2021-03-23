@@ -117,11 +117,11 @@ static void init_hcca_int_table()
         {
             if (_hcca->int_table[idx] == 0)       /* is empty list, insert directly        */
             {
-                _hcca->int_table[idx] = (uint32_t)_Ied[i];
+                _hcca->int_table[idx] = (uint32_t)virt_to_dma(_Ied[i]);
             }
             else
             {
-                ed_p = (ED_T *)_hcca->int_table[idx];
+                ed_p = dma_to_virt((ED_T *)_hcca->int_table[idx]);
 
                 while (1)
                 {
@@ -130,10 +130,10 @@ static void init_hcca_int_table()
 
                     if (ed_p->NextED == 0)       /* reach end of list?                    */
                     {
-                        ed_p->NextED = (uint32_t)_Ied[i];
+                        ed_p->NextED = (uint32_t)virt_to_dma(_Ied[i]);
                         break;
                     }
-                    ed_p = (ED_T *)ed_p->NextED;
+                    ed_p = (ED_T *)dma_to_virt((void *)ed_p->NextED);
                 }
             }
         }
@@ -187,7 +187,7 @@ static int  ohci_init(void)
     _ohci->HcControlHeadED = 0;             /* control ED list head                       */
     _ohci->HcBulkHeadED = 0;                /* bulk ED list head                          */
 
-    _ohci->HcHCCA = (uint32_t)_hcca;        /* HCCA area                                  */
+    _ohci->HcHCCA = (uint32_t)virt_to_dma(_hcca);  /* HCCA area                           */
 
     /* periodic start 90% of frame interval       */
     fminterval = 0x2edf;                    /* 11,999                                     */
@@ -337,8 +337,8 @@ uint32_t ed_make_info(UDEV_T *udev, EP_INFO_T *ep)
 static void write_td(TD_T *td, uint32_t info, uint8_t *buff, uint32_t data_len)
 {
     td->Info = info;
-    td->CBP  = (uint32_t)((!buff || !data_len) ? 0 : buff);
-    td->BE   = (uint32_t)((!buff || !data_len ) ? 0 : (uint32_t)buff + data_len - 1);
+    td->CBP  = (uint32_t)((!buff || !data_len) ? 0 : virt_to_dma(buff));
+    td->BE   = (td->CBP == 0) ? 0 : (uint32_t)(td->CBP + data_len - 1);
     td->buff_start = td->CBP;
     // TD_debug("TD [0x%x]: 0x%x, 0x%x, 0x%x\n", (int)td, td->Info, td->CBP, td->BE);
 }
@@ -407,14 +407,14 @@ static int ohci_ctrl_xfer(UTR_T *utr)
 
         write_td(td_data, info, utr->buff, utr->data_len);
         td_data->ed = ed;
-        td_setup->NextTD = (uint32_t)td_data;
+        td_setup->NextTD = (uint32_t)virt_to_dma(td_data);
         td_setup->next   = td_data;
-        td_data->NextTD  = (uint32_t)td_status;
+        td_data->NextTD  = (uint32_t)virt_to_dma(td_status);
         td_data->next    = td_status;
     }
     else
     {
-        td_setup->NextTD = (uint32_t)td_status;
+        td_setup->NextTD = (uint32_t)virt_to_dma(td_status);
         td_setup->next = td_status;
     }
 
@@ -436,7 +436,7 @@ static int ohci_ctrl_xfer(UTR_T *utr)
     /* prepare ED                                                                         */
     /*------------------------------------------------------------------------------------*/
     ed->TailP = 0;
-    ed->HeadP = (uint32_t)td_setup;
+    ed->HeadP = (uint32_t)virt_to_dma(td_setup);
     ed->Info = ed_make_info(udev, NULL);
     ed->NextED = 0;
 
@@ -458,7 +458,7 @@ static int ohci_ctrl_xfer(UTR_T *utr)
     /*  Start transfer                                                                    */
     /*------------------------------------------------------------------------------------*/
     DISABLE_OHCI_IRQ();
-    _ohci->HcControlHeadED = (uint32_t)ed;                   /* Link ED to OHCI           */
+    _ohci->HcControlHeadED = (uint32_t)virt_to_dma(ed);      /* Link ED to OHCI           */
     _ohci->HcControl |= USBH_HcControl_CLE_Msk;              /* enable control list       */
     ENABLE_OHCI_IRQ();
     _ohci->HcCommandStatus = USBH_HcCommandStatus_CLF_Msk;   /* start Control list        */
@@ -484,7 +484,7 @@ static int ohci_bulk_xfer(UTR_T *utr)
     info = ed_make_info(udev, ep);
 
     /* Check if there's any transfer pending on this endpoint... */
-    ed = (ED_T *)_ohci->HcBulkHeadED;       /* get the head of bulk endpoint list         */
+    ed = dma_to_virt((ED_T *)_ohci->HcBulkHeadED);  /* get the head of bulk endpoint list         */
     while (ed != NULL)
     {
         if (ed->Info == info)               /* have transfer of this EP not completed?    */
@@ -494,7 +494,7 @@ static int ohci_bulk_xfer(UTR_T *utr)
             else
                 break;                      /* ED already there...                        */
         }
-        ed = (ED_T *)ed->NextED;
+        ed = dma_to_virt((ED_T *)ed->NextED);
     }
 
     if (ed == NULL)
@@ -552,8 +552,8 @@ static int ohci_bulk_xfer(UTR_T *utr)
         {
             td_p = td_list;
             while (td_p->NextTD != 0)
-                td_p = (TD_T *)td_p->NextTD;
-            td_p->NextTD = (uint32_t)td;
+                td_p = (TD_T *)dma_to_virt((void *)td_p->NextTD);
+            td_p->NextTD = (uint32_t)virt_to_dma(td);
         }
 
     }
@@ -564,13 +564,13 @@ static int ohci_bulk_xfer(UTR_T *utr)
     /*------------------------------------------------------------------------------------*/
     utr->status = 0;
     DISABLE_OHCI_IRQ();
-    ed->HeadP = (ed->HeadP & 0x2) | (uint32_t)td_list;       /* keep toggleCarry bit      */
+    ed->HeadP = (ed->HeadP & 0x2) | (uint32_t)virt_to_dma(td_list);       /* keep toggleCarry bit      */
     if (bIsNewED)
     {
-        ed->HeadP = (uint32_t)td_list;
+        ed->HeadP = (uint32_t)virt_to_dma(td_list);
         /* Link ED to OHCI Bulk List */
         ed->NextED = _ohci->HcBulkHeadED;
-        _ohci->HcBulkHeadED = (uint32_t)ed;
+        _ohci->HcBulkHeadED = (uint32_t)virt_to_dma(ed);
     }
     ENABLE_OHCI_IRQ();
     _ohci->HcControl |= USBH_HcControl_BLE_Msk;              /* enable bulk list          */
@@ -582,7 +582,7 @@ mem_out:
     while (td_list != NULL)
     {
         td = td_list;
-        td_list = (TD_T *)td_list->NextTD;
+        td_list = (TD_T *)dma_to_virt((void *)td_list->NextTD);
         free_ohci_TD(td);
     }
     free_ohci_ED(ed);
@@ -616,7 +616,7 @@ static int ohci_int_xfer(UTR_T *utr)
     {
         if (ed->Info == info)
             break;                          /* Endpoint found                             */
-        ed = (ED_T *)ed->NextED;
+        ed = dma_to_virt((ED_T *)ed->NextED);
     }
 
     if (ed == NULL)                         /* ED not found, create it                    */
@@ -636,12 +636,12 @@ static int ohci_int_xfer(UTR_T *utr)
             free_ohci_TD(td_new);
             return USBH_ERR_MEMORY_OUT;
         }
-        ed->HeadP = (uint32_t)td;           /* Let both HeadP and TailP point to dummy TD */
-        ed->TailP = ed->HeadP;
+        ed->HeadP = (uint32_t)virt_to_dma(td);           /* Let both HeadP and TailP point to dummy TD */
+        ed->TailP = (uint32_t)virt_to_dma((void *)ed->HeadP);
     }
     else
     {
-        td = (TD_T *)(ed->TailP & ~0xf);    /* TailP always point to the dummy TD         */
+        td = dma_to_virt((TD_T *)(ed->TailP & ~0xf));    /* TailP always point to the dummy TD         */
     }
     ep->hw_pipe = (void *)ed;
 
@@ -659,7 +659,7 @@ static int ohci_int_xfer(UTR_T *utr)
     /* fill this TD                                   */
     write_td(td, info, utr->buff, utr->data_len);
     td->ed = ed;
-    td->NextTD = (uint32_t)td_new;
+    td->NextTD = (uint32_t)virt_to_dma(td_new);
     td->utr = utr;
     utr->td_cnt = 1;                    /* increase TD count, for recalim counter     */
     utr->status = 0;
@@ -669,12 +669,12 @@ static int ohci_int_xfer(UTR_T *utr)
     /*------------------------------------------------------------------------------------*/
     DISABLE_OHCI_IRQ();
 
-    ed->TailP = (uint32_t)td_new;
+    ed->TailP = (uint32_t)virt_to_dma(td_new);
     if (bIsNewED)
     {
         /* Add to list of the same interval */
         ed->NextED = ied->NextED;
-        ied->NextED = (uint32_t)ed;
+        ied->NextED = (uint32_t)virt_to_dma(ed);
     }
 
     ENABLE_OHCI_IRQ();
@@ -707,7 +707,7 @@ static int ohci_iso_xfer(UTR_T *utr)
     {
         if (ed->Info == info)
             break;                          /* Endpoint found                             */
-        ed = (ED_T *)ed->NextED;
+        ed = dma_to_virt((ED_T *)ed->NextED);
     }
 
     if (ed == NULL)                         /* ED not found, create it                    */
@@ -747,8 +747,8 @@ static int ohci_iso_xfer(UTR_T *utr)
         buff_addr = (uint32_t)(utr->iso_buff[i]);
         td->Info = (TD_CC | TD_TYPE_ISO) | ed->next_sf;
         ed->next_sf += get_ohci_interval(ed->bInterval);
-        td->CBP  = buff_addr & ~0xFFF;
-        td->BE   = buff_addr + utr->iso_xlen[i] - 1;
+        td->CBP  = (uint32_t)virt_to_dma((void *)(buff_addr & ~0xFFF));
+        td->BE   = (uint32_t)virt_to_dma((void *)(buff_addr + utr->iso_xlen[i] - 1));
         td->PSW[0] = 0xE000 | (buff_addr & 0xFFF);
 
         td->ed = ed;
@@ -758,7 +758,7 @@ static int ohci_iso_xfer(UTR_T *utr)
         if (td_list == NULL)
             td_list = td;
         else
-            last_td->NextTD = (uint32_t)td;
+            last_td->NextTD = (uint32_t)virt_to_dma(td);
 
         last_td = td;
     };
@@ -770,23 +770,23 @@ static int ohci_iso_xfer(UTR_T *utr)
     DISABLE_OHCI_IRQ();
 
     if ((ed->HeadP & ~0x3) == 0)
-        ed->HeadP = (ed->HeadP & 0x2) | (uint32_t)td_list;   /* keep toggleCarry bit      */
+        ed->HeadP = (ed->HeadP & 0x2) | (uint32_t)virt_to_dma(td_list);   /* keep toggleCarry bit      */
     else
     {
         /* find the tail of TDs under this ED */
-        td = (TD_T *)(ed->HeadP & ~0x3);
+        td = dma_to_virt((TD_T *)(ed->HeadP & ~0x3));
         while (td->NextTD != 0)
         {
-            td = (TD_T *)td->NextTD;
+            td = dma_to_virt((TD_T *)td->NextTD);
         }
-        td->NextTD = (uint32_t)td_list;
+        td->NextTD = (uint32_t)virt_to_dma(td_list);
     }
 
     if (bIsNewED)
     {
         /* Add to list of the same interval */
         ed->NextED = ied->NextED;
-        ied->NextED = (uint32_t)ed;
+        ied->NextED = (uint32_t)virt_to_dma(ed);
     }
 
     ENABLE_OHCI_IRQ();
@@ -799,7 +799,7 @@ mem_out:
     while (td_list != NULL)
     {
         td = td_list;
-        td_list = (TD_T *)td_list->NextTD;
+        td_list = dma_to_virt((TD_T *)td_list->NextTD);
         free_ohci_TD(td);
     }
     free_ohci_ED(ed);
@@ -1046,22 +1046,22 @@ static void remove_ed()
         /*--------------------------------------------------------------------------------*/
         if ((ed_p->Info & ED_EP_ADDR_Msk) == 0)
         {
-            if (_ohci->HcControlHeadED == (uint32_t)ed_p)
+            if (_ohci->HcControlHeadED == (uint32_t)virt_to_dma(ed_p))
             {
                 _ohci->HcControlHeadED = (uint32_t)ed_p->NextED;
                 found = 1;
             }
             else
             {
-                ed = (ED_T *)_ohci->HcControlHeadED;
+                ed = (ED_T *)dma_to_virt((void *)_ohci->HcControlHeadED);
                 while (ed != NULL)
                 {
-                    if (ed->NextED == (uint32_t)ed_p)
+                    if (dma_to_virt((void *)ed->NextED) == ed_p)
                     {
                         ed->NextED = ed_p->NextED;
                         found = 1;
                     }
-                    ed = (ED_T *)ed->NextED;
+                    ed = (ED_T *)dma_to_virt((void *)ed->NextED);
                 }
             }
         }
@@ -1076,13 +1076,13 @@ static void remove_ed()
             ed = ied;
             while (ed != NULL)
             {
-                if (ed->NextED == (uint32_t)ed_p)
+                if (dma_to_virt((void *)ed->NextED) == ed_p)
                 {
                     ed->NextED = ed_p->NextED;
                     found = 1;
                     break;
                 }
-                ed = (ED_T *)ed->NextED;
+                ed = (ED_T *)dma_to_virt((void *)ed->NextED);
             }
         }
 
@@ -1091,7 +1091,7 @@ static void remove_ed()
         /*--------------------------------------------------------------------------------*/
         else
         {
-            if (_ohci->HcBulkHeadED == (uint32_t)ed_p)
+            if (_ohci->HcBulkHeadED == (uint32_t)virt_to_dma(ed_p))
             {
                 ed = (ED_T *)ed_p;
                 _ohci->HcBulkHeadED = ed_p->NextED;
@@ -1099,15 +1099,15 @@ static void remove_ed()
             }
             else
             {
-                ed = (ED_T *)_ohci->HcBulkHeadED;
+                ed = (ED_T *)dma_to_virt((void *)_ohci->HcBulkHeadED);
                 while (ed != NULL)
                 {
-                    if (ed->NextED == (uint32_t)ed_p)
+                    if (dma_to_virt((void *)ed->NextED) == ed_p)
                     {
                         ed->NextED = ed_p->NextED;
                         found = 1;
                     }
-                    ed = (ED_T *)ed->NextED;
+                    ed = (ED_T *)dma_to_virt((void *)ed->NextED);
                 }
             }
         }
@@ -1117,7 +1117,7 @@ static void remove_ed()
         /*--------------------------------------------------------------------------------*/
         if (found)
         {
-            td = (TD_T *)(ed_p->HeadP & ~0x3);
+            td = (TD_T *)dma_to_virt((void *)(ed_p->HeadP & ~0x3));
             if (td != NULL)
             {
                 while (td != NULL)
@@ -1125,7 +1125,7 @@ static void remove_ed()
                     utr = td->utr;
                     td_next = (TD_T *)td->NextTD;
                     free_ohci_TD(td);
-                    td = td_next;
+                    td = dma_to_virt(td_next);
 
                     utr->td_cnt--;
                     if (utr->td_cnt == 0)
@@ -1174,7 +1174,7 @@ void OHCI_IRQHandler(void)
         /*
          *  reverse done list
          */
-        td = (TD_T *)(_hcca->done_head & TD_ADDR_MASK);
+        td = dma_to_virt((TD_T *)(_hcca->done_head & TD_ADDR_MASK));
         _hcca->done_head = 0;
         td_prev = NULL;
         _ohci->HcInterruptStatus = USBH_HcInterruptStatus_WDH_Msk;
@@ -1182,8 +1182,8 @@ void OHCI_IRQHandler(void)
         while (td != NULL)
         {
             //TD_debug("Done list TD 0x%x => 0x%x\n", (int)td, (int)td->NextTD);
-            td_next = (TD_T *)(td->NextTD & TD_ADDR_MASK);
-            td->NextTD = (uint32_t)td_prev;
+            td_next = dma_to_virt((TD_T *)(td->NextTD & TD_ADDR_MASK));
+            td->NextTD = (uint32_t)virt_to_dma(td_prev);
             td_prev = td;
             td = td_next;
         }
@@ -1195,7 +1195,7 @@ void OHCI_IRQHandler(void)
         while (td != NULL)
         {
             TD_debug("Reclaim TD 0x%x, next 0x%x\n", (int)td, td->NextTD);
-            td_next = (TD_T *)td->NextTD;
+            td_next = dma_to_virt((TD_T *)td->NextTD);
             td_done(td);
             free_ohci_TD(td);
             td = td_next;
@@ -1223,12 +1223,12 @@ void dump_ohci_int_table()
     {
         USB_debug("%02d: ", i);
 
-        ed = (ED_T *)_hcca->int_table[i];
+        ed = dma_to_virt((ED_T *)_hcca->int_table[i]);
 
         while (ed != NULL)
         {
             USB_debug("0x%x (0x%x) => ", (int)ed, ed->HeadP);
-            ed = (ED_T *)ed->NextED;
+            ed = dma_to_virt((ED_T *)ed->NextED);
         }
         sysprintf("0\n");
     }
