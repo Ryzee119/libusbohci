@@ -28,7 +28,6 @@
 //#define ED_debug   sysprintf
 #define ED_debug(...)
 
-uint8_t  _hcca_mem[256] __attribute__((aligned(256)));
 
 HCCA_T  *_hcca;
 
@@ -174,7 +173,7 @@ static int  ohci_init(void)
     uint32_t    fminterval;
     volatile int    i;
 
-    _hcca = (HCCA_T *)((uint32_t)_hcca_mem | NON_CACHE_MASK);
+    _hcca = (HCCA_T *)USB_malloc(256, 256);
 
     if (ohci_reset() < 0)
         return -1;
@@ -253,6 +252,7 @@ static void ohci_shutdown(void)
 {
     ohci_suspend();
     DISABLE_OHCI_IRQ();
+    USB_free(_hcca);
 #ifndef OHCI_PER_PORT_POWER
     _ohci->HcRhStatus = USBH_HcRhStatus_LPS_Msk;
 #endif
