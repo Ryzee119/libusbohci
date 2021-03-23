@@ -48,20 +48,68 @@ void  free_hid_device(HID_DEV_T *hid_dev)
     memset((char *)hid_dev, 0, sizeof(HID_DEV_T));
 }
 
+static void hid_write_callback(UTR_T *utr)
+{
+    if (utr)
+        HID_DBGMSG("Write to ep %02 complete\n", utr->ep->bEndpointAddress);
+}
 
 static int hid_probe(IFACE_T *iface)
 {
     UDEV_T       *udev = iface->udev;
     ALT_IFACE_T  *aif = iface->aif;
     DESC_IF_T    *ifd;
-    EP_INFO_T    *ep;
+    EP_INFO_T    *ep = NULL;
     HID_DEV_T    *hdev, *p;
     int          i;
 
     ifd = aif->ifd;
 
-    /* Is this interface HID class? */
-    if (ifd->bInterfaceClass != USB_CLASS_HID)
+    hidtype_t type = UNKNOWN;
+    /* Is this a generic interface HID class? */
+    if (ifd->bInterfaceClass == USB_CLASS_HID)
+        type = GENERIC;
+    /* It is a vendor specific input device */
+    //FIXME: Are these true across all devices including 3rd party?
+    else if (ifd->bInterfaceSubClass == 0x5D && //Xbox360 bInterfaceSubClass
+             ifd->bInterfaceProtocol == 0x01)   //Xbox360 bInterfaceProtocol
+        type = XBOX360_WIRED;
+    else if (ifd->bInterfaceSubClass == 0x5D && //Xbox360 wireless bInterfaceSubClass
+             ifd->bInterfaceProtocol == 0x81)   //Xbox360 wireless bInterfaceProtocol
+        type = XBOX360_WIRELESS;
+    else if (ifd->bInterfaceSubClass == 0x47 && //Xbone and SX bInterfaceSubClass
+             ifd->bInterfaceProtocol == 0xD0 && //Xbone and SX bInterfaceProtocol
+             aif->ep[0].bInterval == 0x04 &&    //These controllers have multiple interfaces with the same class.
+             aif->ep[1].bInterval == 0x04)      //The one we want has a bInternal of 4ms on both eps.
+        type = XBOXONE;
+    else if (ifd->bInterfaceClass == 0x58 &&  //Xbox OG Device bInterfaceClass
+             ifd->bInterfaceSubClass == 0x42) //Xbox OG Device bInterfaceSubClass
+    {
+        //Device is an OG Xbox peripheral. Check the XID descriptor to find out what type:
+        //Ref https://xboxdevwiki.net/Xbox_Input_Devices
+        uint8_t *xid_buff = usbh_alloc_mem(32);
+        uint32_t xfer_len;
+        usbh_ctrl_xfer(iface->udev,
+                             0xC1,          /* bmRequestType */
+                             0x06,          /* bRequest */
+                             0x4200,        /* wValue */
+                             iface->if_num, /* wIndex */
+                             32,            /* wLength */
+                             xid_buff, &xfer_len, 100);
+        uint8_t xid_bType = xid_buff[4];
+        usbh_free_mem(xid_buff, 32);
+        switch (xid_bType)
+        {
+            case 0x01: type = XBOXOG_CONTROLLER;     break; //Duke,S,Wheel,Arcade stick
+            case 0x03: type = XBOXOG_XIR;            break; //Xbox DVD Movie Playback IR Dongle
+            case 0x80: type = XBOXOG_STEELBATTALION; break; //Steel Battalion Controller
+            default:
+                HID_DBGMSG("Unknown OG Xbox Peripheral\n");
+                return USBH_ERR_NOT_MATCHED;
+        }
+        HID_DBGMSG("OG Xbox peripheral type %02x connected\n", xid_bType);
+    }
+    else
         return USBH_ERR_NOT_MATCHED;
 
     HID_DBGMSG("hid_probe - device (vid=0x%x, pid=0x%x), interface %d.\n",
@@ -92,7 +140,34 @@ static int hid_probe(IFACE_T *iface)
     hdev->bSubClassCode = ifd->bInterfaceSubClass;
     hdev->bProtocolCode = ifd->bInterfaceProtocol;
     hdev->next = NULL;
+    hdev->type = type;
+    hdev->user_data = NULL;
     iface->context = (void *)hdev;
+
+    /* Handle controller specific initialisations */
+    if (hdev->type == XBOXONE)
+    {
+        uint8_t xboxone_start_input[] = {0x05, 0x20, 0x00, 0x01, 0x00};
+        uint8_t xboxone_s_init[] = {0x05, 0x20, 0x00, 0x0f, 0x06};
+        usbh_hid_int_write(hdev, 0, xboxone_start_input, sizeof(xboxone_start_input), hid_write_callback);
+        usbh_hid_int_write(hdev, 0, xboxone_s_init, sizeof(xboxone_s_init), hid_write_callback);
+    }
+
+    else if (hdev->type == XBOX360_WIRED)
+    {
+        uint8_t port = iface->udev->port_num;
+        port += (port <= 2) ? 2 : -2; //Xbox ports are numbered 3,4,1,2
+        uint8_t xbox360wired_set_led[] = {0x01, 0x03, port + 1};
+        usbh_hid_int_write(hdev, 0, xbox360wired_set_led, sizeof(xbox360wired_set_led), hid_write_callback);
+    }
+
+    else if (hdev->type == XBOX360_WIRELESS)
+    {
+        uint8_t xbox360w_inquire_present[] = {0x08, 0x00, 0x0F, 0xC0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+        uint8_t xbox360w_set_led[] = {0x00, 0x00, 0x08, 0x40};
+        usbh_hid_int_write(hdev, 0, xbox360w_set_led, sizeof(xbox360w_set_led), hid_write_callback);
+        usbh_hid_int_write(hdev, 0, xbox360w_inquire_present, sizeof(xbox360w_inquire_present), hid_write_callback);
+    }
 
     /*
      *  Chaining newly found HID device to end of HID device list.
