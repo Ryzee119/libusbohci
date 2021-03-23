@@ -14,6 +14,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
+#include <stdarg.h>
+#include <windows.h>
 #include <xboxkrnl/xboxkrnl.h>
 
 #include "usb.h"
@@ -325,6 +327,60 @@ void  USB_free(void *alloc_addr)
     if (disable_ehci_irq)
         ENABLE_EHCI_IRQ();
     return;
+}
+
+//Tick in 10ms blocks
+uint32_t get_ticks(void)
+{
+    return GetTickCount() / 10;
+}
+
+void delay_us(int usec)
+{
+    LARGE_INTEGER duration;
+    duration.QuadPart = ((LONGLONG)usec) * -10;
+    while (1)
+    {
+        NTSTATUS status = KeDelayExecutionThread(UserMode, FALSE, &duration);
+        if (status != STATUS_ALERTED)
+        {
+            return;
+        }
+    }
+}
+
+void *dma_to_virt(void *physical_address)
+{
+    if (physical_address == NULL)
+        return NULL;
+    //Already is a virtual address
+    else if (((uint32_t)physical_address & ~0x7FFFFFFF) != 0)
+        return physical_address;
+    else
+        return (uint32_t *)(~0x7FFFFFFF | (uint32_t)physical_address);
+}
+
+void *virt_to_dma(void *virtual_address)
+{
+    if ((uint32_t)virtual_address == ~0x7FFFFFFF)
+        return NULL;
+    //Already is a physical address
+    else if (((uint32_t)virtual_address & ~0x7FFFFFFF) == 0)
+        return virtual_address;
+    else
+        return (uint32_t *)MmGetPhysicalAddress((uint32_t *)virtual_address);
+}
+
+void sysprintf(const char *format, ...)
+{
+#ifdef ENABLE_DEBUG_MSG
+    char buffer[512];
+    va_list argList;
+    va_start(argList, format);
+    vsnprintf(buffer, sizeof(buffer), format, argList);
+    va_end(argList);
+    debugPrint(buffer);
+#endif
 }
 
 
