@@ -40,8 +40,14 @@ extern void OHCI_IRQHandler(void);
   *
   * @return      None.
   */
+static uint8_t usb_core_initialised = 0;
 void  usbh_core_init()
 {
+    if (usb_core_initialised)
+        return;
+    usb_core_initialised = 1;
+
+    _ohci = USBH;
     DISABLE_EHCI_IRQ();
     DISABLE_OHCI_IRQ();
 
