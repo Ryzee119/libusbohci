@@ -40,8 +40,14 @@ extern void OHCI_IRQHandler(void);
   *
   * @return      None.
   */
+static uint8_t usb_core_initialised = 0;
 void  usbh_core_init()
 {
+    if (usb_core_initialised)
+        return;
+    usb_core_initialised = 1;
+
+    _ohci = USBH;
     DISABLE_EHCI_IRQ();
     DISABLE_OHCI_IRQ();
 
@@ -71,6 +77,36 @@ void  usbh_core_init()
     ENABLE_EHCI_IRQ();
 #endif
 
+}
+
+void  usbh_core_deinit()
+{
+    if (!usb_core_initialised)
+        return;
+
+    UDEV_T * udev = g_udev_list;
+    while (udev != NULL)
+    {
+        disconnect_device(udev);
+        udev = udev->next;
+    }
+    memset(_drivers, 0, sizeof(_drivers));
+
+    g_conn_func = NULL;
+    g_disconn_func = NULL;
+
+#ifdef ENABLE_OHCI
+    ohci_driver.shutdown();
+    usbh_ohci_irq_deinit();
+#endif
+
+#ifdef ENABLE_EHCI
+    ehci_driver.shutdown();
+    usbh_ehci_irq_deinit();
+#endif
+
+    usbh_memory_deinit();
+    usb_core_initialised = 0;
 }
 
 /**

@@ -63,6 +63,16 @@ void  USB_InitializeMemoryPool()
     memset((char *)_MemoryPoolBase, 0, _FreeMemorySize);
 }
 
+void USB_UninitializeMemoryPool()
+{
+    usbh_free_memory_pool(_USBMemoryPool);
+    _MemoryPoolBase = 0;
+    _MemoryPoolEnd = 0;
+    _FreeMemorySize = 0;
+    _AllocatedMemorySize = 0;
+    _pCurrent = NULL;
+}
+
 
 int  USB_available_memory()
 {

@@ -190,6 +190,7 @@ void usbh_sysprintf(const char *format, ...);
 /*                                                                  */
 /*------------------------------------------------------------------*/
 extern void usbh_core_init(void);
+extern void usbh_core_deinit(void);
 extern int  usbh_pooling_hubs(void);
 extern void usbh_install_conn_callback(CONN_FUNC *conn_func, CONN_FUNC *disconn_func);
 extern void usbh_suspend(void);
