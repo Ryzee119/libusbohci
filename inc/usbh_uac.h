@@ -125,6 +125,9 @@ typedef struct uac_dev_t
 
 /*@}*/ /* end of group N9H30_USBH_EXPORTED_STRUCTURES */
 
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /// @cond HIDDEN_SYMBOLS
 
@@ -136,9 +139,6 @@ extern int usbh_uac_find_max_alt(IFACE_T *iface, uint8_t dir, uint8_t attr, uint
 /// @endcond HIDDEN_SYMBOLS
 
 
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 /*@}*/ /* end of group N9H30_USBH_Library */
 
