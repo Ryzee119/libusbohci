@@ -93,6 +93,25 @@ void usbh_memory_init(void)
     USB_InitializeMemoryPool();
 }
 
+void usbh_memory_deinit(void)
+{
+    int   i;
+
+    for (i = 0; i < MEM_POOL_UNIT_NUM; i++)
+    {
+        _unit_used[i] = 0;
+        _mem_pool[i] = NULL;
+    }
+    _usbh_mem_used = 0L;
+    _usbh_max_mem_used = 0L;
+    _mem_pool_used = 0;
+    _sidx = 0;
+    g_udev_list = NULL;
+    memset(_dev_addr_pool, 0, sizeof(_dev_addr_pool));
+    MmFreeContiguousMemory(_mem_pool_buff);
+    USB_UninitializeMemoryPool();
+}
+
 uint32_t  usbh_memory_used(void)
 {
     sysprintf("USB ED and TDs slots: %d/%d, heap used: %d, heap available: %d\n", _mem_pool_used,

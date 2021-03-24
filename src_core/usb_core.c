@@ -85,6 +85,29 @@ void  usbh_core_init()
     sysSetLocalInterrupt(ENABLE_IRQ);   /* enable CPSR I bit */
 }
 
+void  usbh_core_deinit()
+{
+    if (!usb_core_initialised)
+        return;
+
+    UDEV_T * udev = g_udev_list;
+    while (udev != NULL)
+    {
+        disconnect_device(udev);
+        udev = udev->next;
+    }
+    memset(_drivers, 0, sizeof(_drivers));
+
+    g_conn_func = NULL;
+    g_disconn_func = NULL;
+
+    ohci_driver.shutdown();
+    KeDisconnectInterrupt(&InterruptObject);
+    KeRemoveQueueDpc(&DPCObject);
+    usbh_memory_deinit();
+    usb_core_initialised = 0;
+}
+
 /**
   * @brief    Install device connect and disconnect callback function.
   *

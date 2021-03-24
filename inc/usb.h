@@ -356,11 +356,13 @@ extern void usbh_dump_ep_info(EP_INFO_T *ep);
  *  Memory management functions
  */
 extern void USB_InitializeMemoryPool(void);
+extern void USB_UninitializeMemoryPool(void);
 extern void * USB_malloc(int wanted_size, int boundary);
 extern void USB_free(void *);
 extern int  USB_available_memory(void);
 extern int  USB_allocated_memory(void);
 extern void usbh_memory_init(void);
+extern void usbh_memory_deinit(void);
 extern uint32_t  usbh_memory_used(void);
 extern void * usbh_alloc_mem(int size);
 extern void usbh_free_mem(void *p, int size);
