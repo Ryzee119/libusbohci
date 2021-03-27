@@ -204,6 +204,7 @@ extern uint32_t get_ticks(void);   /* This function must be provided by user app
 /*  USB Communication Device Class Library APIs                     */
 /*                                                                  */
 /*------------------------------------------------------------------*/
+typedef void    (CDC_CONN_FUNC)(struct cdc_dev_t *cdev, int param);
 extern void     usbh_cdc_init(void);
 extern struct cdc_dev_t * usbh_cdc_get_device_list(void);
 /// @cond HIDDEN_SYMBOLS
@@ -214,12 +215,14 @@ extern int32_t  usbh_cdc_set_control_line_state(struct cdc_dev_t *cdev, int acti
 extern int32_t  usbh_cdc_start_polling_status(struct cdc_dev_t *cdev, CDC_CB_FUNC *func);
 extern int32_t  usbh_cdc_start_to_receive_data(struct cdc_dev_t *cdev, CDC_CB_FUNC *func);
 extern int32_t  usbh_cdc_send_data(struct cdc_dev_t *cdev, uint8_t *buff, int buff_len);
+extern void     usbh_install_cdc_conn_callback(CDC_CONN_FUNC *conn_func, CDC_CONN_FUNC *disconn_func);
 
 /*------------------------------------------------------------------*/
 /*                                                                  */
 /*  USB Human Interface Class Library APIs                          */
 /*                                                                  */
 /*------------------------------------------------------------------*/
+typedef void    (HID_CONN_FUNC)(struct usbhid_dev *udev, int param);
 extern void     usbh_hid_init(void);
 extern struct usbhid_dev * usbh_hid_get_device_list(void);
 extern int32_t  usbh_hid_get_report_descriptor(struct usbhid_dev *hdev, uint8_t *desc_buf, int buf_max_len);
@@ -234,6 +237,7 @@ extern int32_t  usbh_hid_stop_int_read(struct usbhid_dev *hdev, uint8_t ep_addr)
 extern int32_t  usbh_hid_start_int_write(struct usbhid_dev *hdev, uint8_t ep_addr, HID_IW_FUNC *func);
 extern int32_t  usbh_hid_stop_int_write(struct usbhid_dev *hdev, uint8_t ep_addr);
 extern int32_t  usbh_hid_int_write(struct usbhid_dev *hdev, uint8_t ep_addr, uint8_t *buff, uint32_t len, void *callback);
+extern void     usbh_install_hid_conn_callback(HID_CONN_FUNC *conn_func, HID_CONN_FUNC *disconn_func);
 
 /*------------------------------------------------------------------*/
 /*                                                                  */
@@ -252,6 +256,7 @@ extern int  usbh_umas_reset_disk(int drv_no);
 /*  USB Audio Class Library APIs                                    */
 /*                                                                  */
 /*------------------------------------------------------------------*/
+typedef void (UAC_CONN_FUNC)(struct uac_dev_t *audev, int param);
 extern void usbh_uac_init(void);
 extern int usbh_uac_open(struct uac_dev_t *audev);
 extern struct uac_dev_t * usbh_uac_get_device_list(void);
@@ -266,12 +271,14 @@ extern int usbh_uac_start_audio_in(struct uac_dev_t *uac, UAC_CB_FUNC *func);
 extern int usbh_uac_stop_audio_in(struct uac_dev_t *audev);
 extern int usbh_uac_start_audio_out(struct uac_dev_t *uac, UAC_CB_FUNC *func);
 extern int usbh_uac_stop_audio_out(struct uac_dev_t *audev);
+extern void usbh_install_uac_conn_callback(UAC_CONN_FUNC *conn_func, UAC_CONN_FUNC *disconn_func);
 
 /*------------------------------------------------------------------*/
 /*                                                                  */
 /*  USB Video Class Library APIs                                    */
 /*                                                                  */
 /*------------------------------------------------------------------*/
+typedef void (UVC_CONN_FUNC)(struct uvc_dev_t *vdev, int param);
 extern void usbh_uvc_init(void);
 extern struct uvc_dev_t * usbh_uvc_get_device_list(void);
 extern int  usbh_get_video_format(struct uvc_dev_t *vdev, int index, IMAGE_FORMAT_E *format, int *width, int *height);
@@ -279,6 +286,7 @@ extern int  usbh_set_video_format(struct uvc_dev_t *vdev, IMAGE_FORMAT_E format,
 extern void usbh_uvc_set_video_buffer(struct uvc_dev_t *vdev, uint8_t *image_buff, int img_buff_size);
 extern int usbh_uvc_start_streaming(struct uvc_dev_t *vdev, UVC_CB_FUNC *func);
 extern int usbh_uvc_stop_streaming(struct uvc_dev_t *vdev);
+extern void usbh_install_uvc_conn_callback(UVC_CONN_FUNC *conn_func, UVC_CONN_FUNC *disconn_func);
 
 /// @cond HIDDEN_SYMBOLS
 
