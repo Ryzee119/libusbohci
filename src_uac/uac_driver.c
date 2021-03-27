@@ -39,6 +39,7 @@ static UAC_DEV_T   g_uac_dev[CONFIG_UAC_MAX_DEV];
 
 static UAC_DEV_T   *g_uac_list = NULL;
 
+static UAC_CONN_FUNC *g_uac_conn_func, *g_uac_disconn_func;
 
 static UAC_DEV_T *alloc_uac_device(void)
 {
@@ -165,6 +166,9 @@ static int  uac_probe(IFACE_T *iface)
     UAC_DBGMSG("    STREAM IN IFACE:  0x%x\n", (int)uac->asif_in.iface);
     UAC_DBGMSG("    STREAM OUT IFACE: 0x%x\n", (int)uac->asif_out.iface);
 
+    if (g_uac_conn_func)
+        g_uac_conn_func(uac, 0);
+
     return ret;
 }
 
@@ -180,6 +184,7 @@ static void  uac_disconnect(IFACE_T *iface)
 
     UAC_DBGMSG("uac_disconnect - device (vid=0x%x, pid=0x%x), interface %d removed.\n",
                uac->udev->descriptor.idVendor, uac->udev->descriptor.idProduct, iface->if_num);
+
 
     /*
      *  remove it from UAC device list
@@ -229,10 +234,28 @@ static void  uac_disconnect(IFACE_T *iface)
             }
             UAC_DBGMSG("uac_disconnect - device (vid=0x%x, pid=0x%x), UAC device removed.\n",
                        uac->udev->descriptor.idVendor, uac->udev->descriptor.idProduct);
+
+            if (g_uac_disconn_func)
+                g_uac_disconn_func(uac, 0);
+
             free_uac_device(uac);
         }
     }
 }
+
+/**
+  * @brief    Install uac connect and disconnect callback function.
+  *
+  * @param[in]  conn_func       uac connect callback function.
+  * @param[in]  disconn_func    uac disconnect callback function.
+  * @return     None.
+  */
+void usbh_install_uac_conn_callback(UAC_CONN_FUNC *conn_func, UAC_CONN_FUNC *disconn_func)
+{
+    g_uac_conn_func = conn_func;
+    g_uac_disconn_func = disconn_func;
+}
+
 
 UDEV_DRV_T  uac_driver =
 {
@@ -253,6 +276,8 @@ void usbh_uac_init(void)
 {
     memset((char *)&g_uac_dev[0], 0, sizeof(g_uac_dev));
     g_uac_list = NULL;
+    g_uac_conn_func = NULL;
+    g_uac_disconn_func = NULL;
     usbh_register_driver(&uac_driver);
 }
 

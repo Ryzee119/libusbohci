@@ -23,6 +23,8 @@ extern int  cdc_config_parser(CDC_DEV_T *cdev);
 
 static CDC_DEV_T *g_cdev_list = NULL;
 
+static CDC_CONN_FUNC *g_cdc_conn_func, *g_cdc_disconn_func;
+
 static CDC_DEV_T *alloc_cdc_device(void)
 {
     CDC_DEV_T  *cdev;
@@ -198,6 +200,9 @@ static int  cdc_probe(IFACE_T *iface)
         free_cdc_device(d);
     }
 
+    if (g_cdc_conn_func)
+        g_cdc_conn_func(cdev, 0);
+
     return 0;
 }
 
@@ -213,6 +218,9 @@ static void  cdc_disconnect(IFACE_T *iface)
 
     if (cdev == NULL)
         return;              /* should have been disconnected. */
+
+    if (g_cdc_disconn_func)
+        g_cdc_disconn_func(cdev, 0);
 
     if_cdc = cdev->iface_cdc;
     if_data = cdev->iface_data;
@@ -256,6 +264,18 @@ static void  cdc_disconnect(IFACE_T *iface)
     free_cdc_device(cdev);
 }
 
+/**
+  * @brief    Install cdc connect and disconnect callback function.
+  *
+  * @param[in]  conn_func       cdc connect callback function.
+  * @param[in]  disconn_func    cdc disconnect callback function.
+  * @return     None.
+  */
+void usbh_install_cdc_conn_callback(CDC_CONN_FUNC *conn_func, CDC_CONN_FUNC *disconn_func)
+{
+    g_cdc_conn_func = conn_func;
+    g_cdc_disconn_func = disconn_func;
+}
 
 static UDEV_DRV_T  cdc_driver =
 {
@@ -276,6 +296,8 @@ static UDEV_DRV_T  cdc_driver =
 void usbh_cdc_init(void)
 {
     g_cdev_list = NULL;
+    g_cdc_conn_func = NULL;
+    g_cdc_disconn_func = NULL;
     usbh_register_driver(&cdc_driver);
 }
 

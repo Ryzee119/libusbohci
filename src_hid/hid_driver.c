@@ -26,6 +26,8 @@ static HID_DEV_T  g_hid_dev[CONFIG_HID_MAX_DEV];
 
 static HID_DEV_T *g_hdev_list = NULL;
 
+static HID_CONN_FUNC *g_hid_conn_func, *g_hid_disconn_func;
+
 static HID_DEV_T *alloc_hid_device(void)
 {
     int     i;
@@ -181,6 +183,9 @@ static int hid_probe(IFACE_T *iface)
         p->next = hdev;
     }
 
+    if (g_hid_conn_func)
+        g_hid_conn_func(hdev, 0);
+
     HID_DBGMSG("usbhid_probe OK.\n");
 
     return 0;
@@ -194,6 +199,9 @@ static void  hid_disconnect(IFACE_T *iface)
     int         i;
 
     hdev = (HID_DEV_T *)(iface->context);
+
+    if (g_hid_disconn_func)
+        g_hid_disconn_func(hdev, 0);
 
     for (i = 0; i < iface->aif->ifd->bNumEndpoints; i++)
     {
@@ -245,6 +253,19 @@ static void  hid_disconnect(IFACE_T *iface)
     }
 }
 
+/**
+  * @brief    Install hdev connect and disconnect callback function.
+  *
+  * @param[in]  conn_func       hdev connect callback function.
+  * @param[in]  disconn_func    hdev disconnect callback function.
+  * @return     None.
+  */
+void usbh_install_hid_conn_callback(HID_CONN_FUNC *conn_func, HID_CONN_FUNC *disconn_func)
+{
+    g_hid_conn_func = conn_func;
+    g_hid_disconn_func = disconn_func;
+}
+
 
 UDEV_DRV_T  hid_driver =
 {
@@ -266,6 +287,8 @@ void usbh_hid_init(void)
 {
     memset((char *)&g_hid_dev[0], 0, sizeof(g_hid_dev));
     g_hdev_list = NULL;
+    g_hid_conn_func = NULL;
+    g_hid_disconn_func = NULL;
     usbh_register_driver(&hid_driver);
 }
 
