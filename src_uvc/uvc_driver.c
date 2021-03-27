@@ -45,6 +45,8 @@ static uint8_t g_uvc_buff_used[UVC_MAX_DEVICE];
 
 static UVC_DEV_T *g_vdev_list = NULL;
 
+static UVC_CONN_FUNC *g_uvc_conn_func, *g_uvc_disconn_func;
+
 static UVC_DEV_T *alloc_uvc_device(UDEV_T *udev)
 {
     UVC_DEV_T  *vdev;
@@ -239,6 +241,9 @@ static int  uvc_probe(IFACE_T *iface)
         }
     }
 
+    if (g_uvc_conn_func)
+        g_uvc_conn_func(vdev, 0);
+
     return 0;
 }
 
@@ -281,11 +286,26 @@ static void  uvc_disconnect(IFACE_T *iface)
 
     if ((vdev->iface_ctrl == NULL) && (vdev->iface_stream == NULL))
     {
+        if (g_uvc_disconn_func)
+            g_uvc_disconn_func(vdev, 0);
+
         remove_device_from_list(vdev);
         free_uvc_device(vdev);
     }
 }
 
+/**
+  * @brief    Install uvc connect and disconnect callback function.
+  *
+  * @param[in]  conn_func       uvc connect callback function.
+  * @param[in]  disconn_func    uvc disconnect callback function.
+  * @return     None.
+  */
+void usbh_install_uvc_conn_callback(UVC_CONN_FUNC *conn_func, UVC_CONN_FUNC *disconn_func)
+{
+    g_uvc_conn_func = conn_func;
+    g_uvc_disconn_func = disconn_func;
+}
 
 static UDEV_DRV_T  uvc_driver =
 {
