@@ -1060,23 +1060,23 @@ int  connect_device(UDEV_T *udev)
 #endif
 
 #if 1  /* printf string descriptors, for debug only */
-    str_buff = (uint8_t *)usbh_alloc_mem(MAX_DESC_BUFF_SIZE);
-    if (udev->descriptor.iManufacturer != 0)
+    str_buff = (uint8_t *)usbh_alloc_mem(64);
+    if (str_buff && udev->descriptor.iManufacturer != 0)
     {
-        usbh_get_string_descriptor(udev, udev->descriptor.iManufacturer, str_buff, MAX_DESC_BUFF_SIZE);
+        usbh_get_string_descriptor(udev, udev->descriptor.iManufacturer, str_buff, 64);
         print_usb_string("Manufacturer: ", str_buff);
     }
-    if (udev->descriptor.iProduct != 0)
+    if (str_buff && udev->descriptor.iProduct != 0)
     {
-        usbh_get_string_descriptor(udev, udev->descriptor.iProduct, str_buff, MAX_DESC_BUFF_SIZE);
+        usbh_get_string_descriptor(udev, udev->descriptor.iProduct, str_buff, 64);
         print_usb_string("Product: ", str_buff);
     }
-    if (udev->descriptor.iSerialNumber != 0)
+    if (str_buff && udev->descriptor.iSerialNumber != 0)
     {
-        usbh_get_string_descriptor(udev, udev->descriptor.iSerialNumber, str_buff, MAX_DESC_BUFF_SIZE);
+        usbh_get_string_descriptor(udev, udev->descriptor.iSerialNumber, str_buff, 64);
         print_usb_string("Serial Number: ", str_buff);
     }
-    usbh_free_mem(str_buff, MAX_DESC_BUFF_SIZE);
+    usbh_free_mem(str_buff, 64);
 #endif
 
     /* Always select the first configuration */
