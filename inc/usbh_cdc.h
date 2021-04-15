@@ -189,6 +189,7 @@ typedef struct cdc_dev_t
     uint8_t             rx_busy;        /* Bulk in transfer is on going                       */
     struct cdc_dev_t    *next;
     void                *client;
+    void *user_data;                     /*!< Pointer to an optional user struct              */
 }   CDC_DEV_T;
 
 /*@}*/ /* end of group USBH_EXPORTED_STRUCTURES */
