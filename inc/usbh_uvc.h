@@ -629,6 +629,7 @@ typedef struct uvc_dev_t
     int               img_size;       /* Size of the image data stored in img_buff          */
     UVC_CB_FUNC       *func_rx;       /* user callback function for receiving images        */
     struct uvc_dev_t  *next;
+    void              *user_data;     /*!< Pointer to an optional user struct       */
 }   UVC_DEV_T;
 /*@}*/ /* end of group N9H30_USBH_EXPORTED_STRUCTURES */
 /*@}*/ /* end of group N9H30_USBH_Library */
