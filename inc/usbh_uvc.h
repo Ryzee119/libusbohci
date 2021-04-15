@@ -382,15 +382,15 @@ typedef struct __attribute__((__packed__)) desc_vc_pu_t
     /* D16: Analog Video Standard                     */
     /* D17: Analog Video Lock Status                  */
     /* D18: Contrast, Auto                            */
-    /* D19 ¡V D23: Reserved. Set to zero.              */
+    /* D19 ï¿½V D23: Reserved. Set to zero.              */
     uint8_t  iProcessing;              /* Index of a string descriptor                   */
     uint8_t  bmVideoStandards;         /* A bitmap of all analog video standards supported by the Processing Unit.  */
     /* D0: None                                       */
-    /* D1: NTSC ¡V 525/60                              */
-    /* D2: PAL ¡V 625/50                               */
-    /* D3: SECAM ¡V 625/50                             */
-    /* D4: NTSC ¡V 625/50                              */
-    /* D5: PAL ¡V 525/60                               */
+    /* D1: NTSC ï¿½V 525/60                              */
+    /* D2: PAL ï¿½V 625/50                               */
+    /* D3: SECAM ï¿½V 625/50                             */
+    /* D4: NTSC ï¿½V 625/50                              */
+    /* D5: PAL ï¿½V 525/60                               */
     /* D6: White Balance Temperature                  */
     /* D6-D7: Reserved. Set to zero.                  */
 } DESC_VC_PU_T;
@@ -629,6 +629,7 @@ typedef struct uvc_dev_t
     int               img_size;       /* Size of the image data stored in img_buff          */
     UVC_CB_FUNC       *func_rx;       /* user callback function for receiving images        */
     struct uvc_dev_t  *next;
+    void              *user_data;     /*!< Pointer to an optional user struct       */
 }   UVC_DEV_T;
 /*@}*/ /* end of group N9H30_USBH_EXPORTED_STRUCTURES */
 /*@}*/ /* end of group N9H30_USBH_Library */
