@@ -40,7 +40,6 @@ extern int uvc_parse_streaming_interface(UVC_DEV_T *vdev, IFACE_T *iface);
 extern int usbh_uvc_probe_control(UVC_DEV_T *vdev, uint8_t req, UVC_CTRL_PARAM_T *param);
 
 
-uint8_t  g_uvc_buff_pool[UVC_MAX_DEVICE][UVC_UTR_PER_STREAM * UVC_UTR_INBUF_SIZE] __attribute__((aligned(32)));
 static uint8_t g_uvc_buff_used[UVC_MAX_DEVICE];
 
 static UVC_DEV_T *g_vdev_list = NULL;
@@ -71,7 +70,7 @@ static UVC_DEV_T *alloc_uvc_device(UDEV_T *udev)
     {
         if (g_uvc_buff_used[i] == 0)
         {
-            vdev->in_buff = (uint8_t *)((uint32_t)&g_uvc_buff_pool[i][0] | 0x80000000);
+            vdev->in_buff = (uint8_t *)usbh_alloc_mem(UVC_UTR_PER_STREAM * UVC_UTR_INBUF_SIZE);
             g_uvc_buff_used[i] = 1;
             break;
         }
@@ -92,12 +91,13 @@ void  free_uvc_device(UVC_DEV_T *vdev)
 
     if (vdev->in_buff != NULL)
     {
-        vdev->in_buff = (uint8_t *)((uint32_t)vdev->in_buff & ~0x80000000);
         for (i = 0; i < UVC_MAX_DEVICE; i++)
         {
-            if (vdev->in_buff == &g_uvc_buff_pool[i][0])
+            if (vdev->in_buff != NULL)
             {
                 UVC_DBGMSG("Free UVC iso-in buffer 0x%x.\n", (int)vdev->in_buff);
+                usbh_free_mem(vdev->in_buff, UVC_UTR_PER_STREAM * UVC_UTR_INBUF_SIZE);
+                vdev->in_buff = NULL;
                 g_uvc_buff_used[i] = 0;
             }
         }
