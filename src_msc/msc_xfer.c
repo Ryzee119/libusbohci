@@ -15,8 +15,7 @@
 #include <string.h>
 
 #include "usb.h"
-#include "msc.h"
-#include "diskio.h"                // FATFS header
+#include "usbh_msc.h"
 
 
 static int __tag = 0x10e24388;
