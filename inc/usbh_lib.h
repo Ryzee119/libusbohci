@@ -142,6 +142,8 @@ typedef int (UAC_CB_FUNC)(struct uac_dev_t *dev, uint8_t *data, int len);    /*!
 struct uvc_dev_t;
 typedef int (UVC_CB_FUNC)(struct uvc_dev_t *dev, uint8_t *data, int len);    /*!< video callback function \hideinitializer */
 
+struct msc_dev_t;
+
 typedef enum image_format_e
 {
     UVC_FORMAT_INVALID = 0,
@@ -244,12 +246,13 @@ extern void     usbh_install_hid_conn_callback(HID_CONN_FUNC *conn_func, HID_CON
 /*  USB Mass Storage Class Library APIs                             */
 /*                                                                  */
 /*------------------------------------------------------------------*/
+typedef void (MSC_CONN_FUNC)(struct msc_dev_t *msc, int param);
 extern int  usbh_umas_init(void);
-extern int  usbh_umas_disk_status(int drv_no);
-extern int  usbh_umas_read(int drv_no, uint32_t sec_no, int sec_cnt, uint8_t *buff);
-extern int  usbh_umas_write(int drv_no, uint32_t sec_no, int sec_cnt, uint8_t *buff);
-extern int  usbh_umas_ioctl(int drv_no, int cmd, void *buff);
-extern int  usbh_umas_reset_disk(int drv_no);
+extern struct msc_dev_t *usbh_msc_get_device_list(void);
+extern int  usbh_umas_read(struct msc_dev_t *msc, uint32_t sec_no, int sec_cnt, uint8_t *buff);
+extern int  usbh_umas_write(struct msc_dev_t *msc, uint32_t sec_no, int sec_cnt, uint8_t *buff);
+extern int  usbh_umas_reset_disk(struct msc_dev_t *msc);
+extern void usbh_install_msc_conn_callback(MSC_CONN_FUNC *conn_func, MSC_CONN_FUNC *disconn_func);
 
 /*------------------------------------------------------------------*/
 /*                                                                  */

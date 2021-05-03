@@ -1,8 +1,7 @@
 #ifndef _USBH_MSC_H_
 #define _USBH_MSC_H_
 
-#include "ff.h"
-#include "diskio.h"     /* FatFs lower layer API */
+#include "usb.h"
 
 
 /// @cond HIDDEN_SYMBOLS
@@ -14,12 +13,6 @@
 #else
 #define msc_debug_msg(...)
 #endif
-
-
-#define USBDRV_0                  0      /* FATFS assigned USB disk drive volumn number base   */
-#define USBDRV_MAX                9      /* FATFS assigned USB disk drive volumn number end    */
-#define USBDRV_CNT                (USBDRV_MAX - USBDRV_0 + 1)
-
 
 /* Mass Storage Class Sub-class */
 #define MSC_SCLASS_RBC            0x01   /* Typically, flash devices      */
@@ -82,7 +75,7 @@ struct bulk_cs_wrap
 
 #define SCSI_BUFF_LEN             36
 
-typedef struct msc_t
+typedef struct msc_dev_t
 {
     IFACE_T     *iface;
     uint32_t    uid;                     /*!< The unique ID to identify a MSC device.     */
@@ -90,16 +83,15 @@ typedef struct msc_t
     EP_INFO_T   *ep_bulk_out;            /* bulk-out endpoint                             */
     uint8_t     max_lun;
     uint8_t     lun;                     /* MSC lun of this instance                      */
-    uint8_t     root;                    /* root instance?                                */
     struct bulk_cb_wrap  cmd_blk;        /* MSC Bulk-only command block                   */
     struct bulk_cs_wrap  cmd_status;     /* MSC Bulk-only command status                  */
     uint8_t     *scsi_buff;              /* buffer for SCSI commands                      */
     uint32_t    uTotalSectorN;
     uint32_t    nSectorSize;
     uint32_t    uDiskSize;
-    int         drv_no;                  /* Logical drive number associated with this instance */
-    FATFS       fatfs_vol;               /* FATFS volumn                                  */
-    struct msc_t  *next;                 /* point to next MSC device                      */
+    uint8_t     drv_no;                  /* Logical driver number of this instance        */
+    void        *user_data;              /* Pointer to an optional user struct            */
+    struct msc_dev_t  *next;             /* Point to next MSC device                      */
 }  MSC_T;
 
 
