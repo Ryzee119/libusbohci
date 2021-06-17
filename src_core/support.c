@@ -13,14 +13,17 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <assert.h>
+#include <stdarg.h>
 
 #include "usb.h"
 
 /// @cond HIDDEN_SYMBOLS
 
 
-#define  USB_MEMORY_POOL_SIZE   (32*1024)
-#define  USB_MEM_BLOCK_SIZE     128
+#ifndef USB_MEM_BLOCK_SIZE
+#define USB_MEM_BLOCK_SIZE 4096
+#endif
 
 #define  BOUNDARY_WORD          4
 
@@ -39,7 +42,7 @@ typedef struct USB_mhdr
     uint32_t  reserved;
 }  USB_MHDR_T;
 
-uint8_t  _USBMemoryPool[USB_MEMORY_POOL_SIZE] __attribute__((aligned(USB_MEM_BLOCK_SIZE)));
+uint8_t  *_USBMemoryPool;
 
 
 static USB_MHDR_T  *_pCurrent;
@@ -50,12 +53,24 @@ static uint32_t  _MemoryPoolBase, _MemoryPoolEnd;
 
 void  USB_InitializeMemoryPool()
 {
+    _USBMemoryPool = usbh_allocate_memory_pool(USB_MEMORY_POOL_SIZE, USB_MEM_BLOCK_SIZE);
+    assert(_USBMemoryPool != NULL);
     _MemoryPoolBase = (UINT32)&_USBMemoryPool[0] | NON_CACHE_MASK;
     _MemoryPoolEnd = _MemoryPoolBase + USB_MEMORY_POOL_SIZE;
     _FreeMemorySize = _MemoryPoolEnd - _MemoryPoolBase;
     _AllocatedMemorySize = 0;
     _pCurrent = (USB_MHDR_T *)_MemoryPoolBase;
     memset((char *)_MemoryPoolBase, 0, _FreeMemorySize);
+}
+
+void USB_UninitializeMemoryPool()
+{
+    usbh_free_memory_pool(_USBMemoryPool);
+    _MemoryPoolBase = 0;
+    _MemoryPoolEnd = 0;
+    _FreeMemorySize = 0;
+    _AllocatedMemorySize = 0;
+    _pCurrent = NULL;
 }
 
 
@@ -219,6 +234,7 @@ void  *USB_malloc(INT wanted_size, INT boundary)
     while ((wrap == 0) || (_pCurrent < pPrimitivePos));
 
     sysprintf("USB_malloc - No free memory!\n");
+    assert(0);
     if (disable_ohci_irq)
         ENABLE_OHCI_IRQ();
     if (disable_ehci_irq)
@@ -314,6 +330,39 @@ void  USB_free(void *alloc_addr)
     if (disable_ehci_irq)
         ENABLE_EHCI_IRQ();
     return;
+}
+
+//Tick in 10ms blocks
+uint32_t get_ticks(void)
+{
+    return usbh_get_ticks();
+}
+
+void delay_us(int usec)
+{
+    usbh_delay_us(usec);
+}
+
+void *dma_to_virt(void *physical_address)
+{
+    return usbh_dma_to_virt(physical_address);
+}
+
+void *virt_to_dma(void *virtual_address)
+{
+    return usbh_virt_to_dma(virtual_address);
+}
+
+void sysprintf(const char *format, ...)
+{
+#ifdef ENABLE_DEBUG_MSG
+    char buffer[512];
+    va_list argList;
+    va_start(argList, format);
+    vsnprintf(buffer, sizeof(buffer), format, argList);
+    va_end(argList);
+    usbh_sysprintf(buffer);
+#endif
 }
 
 

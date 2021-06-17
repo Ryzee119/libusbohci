@@ -120,6 +120,7 @@ typedef struct uac_dev_t
     uint32_t       uid;                     /*!< The unique ID to identify an UAC device. */
     UAC_STATE_E    state;
     struct uac_dev_t    *next;              /*!< point to the UAC device                  */
+    void *user_data;                        /*!< Pointer to an optional user struct       */
 } UAC_DEV_T;                                /*! audio class device structure              */
 
 
