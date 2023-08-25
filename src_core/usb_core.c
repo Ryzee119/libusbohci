@@ -658,22 +658,7 @@ int usbh_get_config_descriptor(UDEV_T *udev, uint8_t *desc_buff, int buff_len)
     /*------------------------------------------------------------------------------------*/
     ret = usbh_ctrl_xfer(udev, REQ_TYPE_IN | REQ_TYPE_STD_DEV | REQ_TYPE_TO_DEV,
                          USB_REQ_GET_DESCRIPTOR,
-                         ((USB_DT_STANDARD | USB_DT_CONFIGURATION) << 8), 0, 9,
-                         desc_buff, &read_len, 200);
-    if (ret < 0)
-        return ret;
-
-    if (conf->wTotalLength > buff_len)
-    {
-        USB_error("Device configuration %d length > %d!\n", conf->wTotalLength, buff_len);
-        return USBH_ERR_DATA_OVERRUN;
-    }
-
-    read_len = conf->wTotalLength;
-
-    ret = usbh_ctrl_xfer(udev, REQ_TYPE_IN | REQ_TYPE_STD_DEV | REQ_TYPE_TO_DEV,
-                         USB_REQ_GET_DESCRIPTOR,
-                         ((USB_DT_STANDARD | USB_DT_CONFIGURATION) << 8), 0, read_len,
+                         ((USB_DT_STANDARD | USB_DT_CONFIGURATION) << 8), 0, buff_len,
                          desc_buff, &read_len, 200);
     if (ret < 0)
         return ret;
@@ -1048,7 +1033,15 @@ int  connect_device(UDEV_T *udev)
     udev->cfd_buff = (uint8_t *)conf;
 
     /* Get configuration descriptor again with new device address */
-    ret = usbh_get_config_descriptor(udev, (uint8_t *)conf, MAX_DESC_BUFF_SIZE);
+    // Initally get 0x50 bytes is an xbox specific thing?
+    ret = usbh_get_config_descriptor(udev, (uint8_t *)conf, 0x50);
+
+    // Got config descriptor, but it's actually longer than 0x50 bytes. Get the whole lot.
+    if (ret == USBH_OK && conf->wTotalLength > 0x50)
+    {
+        uint16_t len = (conf->wTotalLength > MAX_DESC_BUFF_SIZE) ? MAX_DESC_BUFF_SIZE : conf->wTotalLength;
+        ret = usbh_get_config_descriptor(udev, (uint8_t *)conf, len);
+    }
     if (ret < 0)
     {
         free_dev_address(udev->dev_num);
