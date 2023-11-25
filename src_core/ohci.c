@@ -873,7 +873,7 @@ static int ohci_rh_polling(void)
         _ohci->HcRhPortStatus[i] = USBH_HcRhPortStatus_OCIC_Msk | USBH_HcRhPortStatus_PRSC_Msk |
                                    USBH_HcRhPortStatus_PSSC_Msk | USBH_HcRhPortStatus_PESC_Msk;
 
-        if ((_ohci->HcRhPortStatus[i] & USBH_HcRhPortStatus_CSC_Msk) == 0)
+        if ((_ohci->HcRhPortStatus[i] & USBH_HcRhPortStatus_CSC_Msk) == 0 && !(_ohci->HcRhPortStatus[i] & USBH_HcRhPortStatus_CCS_Msk && ohci_find_device_by_port(i+1) == NULL) )
             continue;
         sysprintf("OHCI port%d status change: 0x%x\n", i+1, _ohci->HcRhPortStatus[i]);
 

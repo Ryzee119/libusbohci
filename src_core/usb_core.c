@@ -1052,7 +1052,7 @@ int  connect_device(UDEV_T *udev)
     dump_config_descriptor(conf);
 #endif
 
-#if 1  /* printf string descriptors, for debug only */
+#if 0  /* printf string descriptors, for debug only */
     str_buff = (uint8_t *)usbh_alloc_mem(64);
     if (str_buff && udev->descriptor.iManufacturer != 0)
     {
