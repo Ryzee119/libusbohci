@@ -40,8 +40,14 @@ extern void OHCI_IRQHandler(void);
   *
   * @return      None.
   */
+static uint8_t usb_core_initialised = 0;
 void  usbh_core_init()
 {
+    if (usb_core_initialised)
+        return;
+    usb_core_initialised = 1;
+
+    _ohci = USBH;
     DISABLE_EHCI_IRQ();
     DISABLE_OHCI_IRQ();
 
@@ -54,29 +60,53 @@ void  usbh_core_init()
     g_disconn_func = NULL;
 
     usbh_hub_init();
-
-    _ehci->USBPCR0 = 0x160;                /* enable PHY 0          */
-    _ehci->USBPCR1 = 0x520;                /* enable PHY 1          */
     usbh_memory_init();
 
     //_ohci->HcMiscControl |= USBH_HcMiscControl_OCAL_Msk; /* Over-current active low  */
     _ohci->HcMiscControl &= ~USBH_HcMiscControl_OCAL_Msk; /* Over-current active high  */
 
 #ifdef ENABLE_OHCI
-    sysInstallISR(HIGH_LEVEL_SENSITIVE | IRQ_LEVEL_1, OHCI_IRQn, (PVOID)OHCI_IRQHandler);
+    usbh_ohci_irq_init();
     ohci_driver.init();
     ENABLE_OHCI_IRQ();
 #endif
 
 #ifdef ENABLE_EHCI
-    sysInstallISR(HIGH_LEVEL_SENSITIVE | IRQ_LEVEL_1, EHCI_IRQn, (PVOID)EHCI_IRQHandler);
+    usbh_ehci_irq_init();
     ehci_driver.init();
     ENABLE_EHCI_IRQ();
 #endif
 
-    sysFlushCache(I_D_CACHE);
+}
 
-    sysSetLocalInterrupt(ENABLE_IRQ);   /* enable CPSR I bit */
+void  usbh_core_deinit()
+{
+    if (!usb_core_initialised)
+        return;
+
+    UDEV_T * udev = g_udev_list;
+    while (udev != NULL)
+    {
+        disconnect_device(udev);
+        udev = udev->next;
+    }
+    memset(_drivers, 0, sizeof(_drivers));
+
+    g_conn_func = NULL;
+    g_disconn_func = NULL;
+
+#ifdef ENABLE_OHCI
+    ohci_driver.shutdown();
+    usbh_ohci_irq_deinit();
+#endif
+
+#ifdef ENABLE_EHCI
+    ehci_driver.shutdown();
+    usbh_ehci_irq_deinit();
+#endif
+
+    usbh_memory_deinit();
+    usb_core_initialised = 0;
 }
 
 /**
@@ -335,7 +365,6 @@ int usbh_bulk_xfer(UTR_T *utr)
   */
 int usbh_int_xfer(UTR_T *utr)
 {
-    sysFlushCache(I_D_CACHE);
     return utr->udev->hc_driver->int_xfer(utr);
 }
 
@@ -629,22 +658,7 @@ int usbh_get_config_descriptor(UDEV_T *udev, uint8_t *desc_buff, int buff_len)
     /*------------------------------------------------------------------------------------*/
     ret = usbh_ctrl_xfer(udev, REQ_TYPE_IN | REQ_TYPE_STD_DEV | REQ_TYPE_TO_DEV,
                          USB_REQ_GET_DESCRIPTOR,
-                         ((USB_DT_STANDARD | USB_DT_CONFIGURATION) << 8), 0, 9,
-                         desc_buff, &read_len, 200);
-    if (ret < 0)
-        return ret;
-
-    if (conf->wTotalLength > buff_len)
-    {
-        USB_error("Device configuration %d length > %d!\n", conf->wTotalLength, buff_len);
-        return USBH_ERR_DATA_OVERRUN;
-    }
-
-    read_len = conf->wTotalLength;
-
-    ret = usbh_ctrl_xfer(udev, REQ_TYPE_IN | REQ_TYPE_STD_DEV | REQ_TYPE_TO_DEV,
-                         USB_REQ_GET_DESCRIPTOR,
-                         ((USB_DT_STANDARD | USB_DT_CONFIGURATION) << 8), 0, read_len,
+                         ((USB_DT_STANDARD | USB_DT_CONFIGURATION) << 8), 0, buff_len,
                          desc_buff, &read_len, 200);
     if (ret < 0)
         return ret;
@@ -1019,7 +1033,15 @@ int  connect_device(UDEV_T *udev)
     udev->cfd_buff = (uint8_t *)conf;
 
     /* Get configuration descriptor again with new device address */
-    ret = usbh_get_config_descriptor(udev, (uint8_t *)conf, MAX_DESC_BUFF_SIZE);
+    // Initally get 0x50 bytes is an xbox specific thing?
+    ret = usbh_get_config_descriptor(udev, (uint8_t *)conf, 0x50);
+
+    // Got config descriptor, but it's actually longer than 0x50 bytes. Get the whole lot.
+    if (ret == USBH_OK && conf->wTotalLength > 0x50)
+    {
+        uint16_t len = (conf->wTotalLength > MAX_DESC_BUFF_SIZE) ? MAX_DESC_BUFF_SIZE : conf->wTotalLength;
+        ret = usbh_get_config_descriptor(udev, (uint8_t *)conf, len);
+    }
     if (ret < 0)
     {
         free_dev_address(udev->dev_num);
@@ -1030,24 +1052,24 @@ int  connect_device(UDEV_T *udev)
     dump_config_descriptor(conf);
 #endif
 
-#if 1  /* printf string descriptors, for debug only */
-    str_buff = (uint8_t *)usbh_alloc_mem(MAX_DESC_BUFF_SIZE);
-    if (udev->descriptor.iManufacturer != 0)
+#if 0  /* printf string descriptors, for debug only */
+    str_buff = (uint8_t *)usbh_alloc_mem(64);
+    if (str_buff && udev->descriptor.iManufacturer != 0)
     {
-        usbh_get_string_descriptor(udev, udev->descriptor.iManufacturer, str_buff, MAX_DESC_BUFF_SIZE);
+        usbh_get_string_descriptor(udev, udev->descriptor.iManufacturer, str_buff, 64);
         print_usb_string("Manufacturer: ", str_buff);
     }
-    if (udev->descriptor.iProduct != 0)
+    if (str_buff && udev->descriptor.iProduct != 0)
     {
-        usbh_get_string_descriptor(udev, udev->descriptor.iProduct, str_buff, MAX_DESC_BUFF_SIZE);
+        usbh_get_string_descriptor(udev, udev->descriptor.iProduct, str_buff, 64);
         print_usb_string("Product: ", str_buff);
     }
-    if (udev->descriptor.iSerialNumber != 0)
+    if (str_buff && udev->descriptor.iSerialNumber != 0)
     {
-        usbh_get_string_descriptor(udev, udev->descriptor.iSerialNumber, str_buff, MAX_DESC_BUFF_SIZE);
+        usbh_get_string_descriptor(udev, udev->descriptor.iSerialNumber, str_buff, 64);
         print_usb_string("Serial Number: ", str_buff);
     }
-    usbh_free_mem(str_buff, MAX_DESC_BUFF_SIZE);
+    usbh_free_mem(str_buff, 64);
 #endif
 
     /* Always select the first configuration */

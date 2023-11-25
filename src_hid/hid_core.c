@@ -453,6 +453,9 @@ int32_t usbh_hid_start_int_read(HID_DEV_T *hdev, uint8_t ep_addr, HID_IR_FUNC *f
         return USBH_ERR_MEMORY_OUT;
     }
 
+    //No need to saturate endpoint with requests. Keep time for outgoing writes too
+    ep->bInterval *= 2;
+
     hdev->read_func = func;
 
     utr->context = hdev;
@@ -682,6 +685,103 @@ int32_t usbh_hid_stop_int_write(HID_DEV_T *hdev, uint8_t ep_addr)
 
     return ret;
 }
+
+/**
+ *  @brief  Do a single write to the USB interrupt out transfer.
+ *  @param[in] hdev       HID device pointer.
+ *  @param[in] ep_addr    Endpoint address. If ep_addr is 0, it will use the first found interrupt-out
+ *                        endpoint. If ep_addr is not 0, it will use the specified endpoint if found.
+ *  @param[in] buff       Buffer containing the data to send
+ *  @param[in] len        Number of bytes to send
+ *  @param[in] callback   The interrupt in data transfer callback function.
+ *  @return   Success or not.
+ *  @retval   0           Success
+ *  @retval   Otherwise   Failed
+ */
+int32_t usbh_hid_int_write(HID_DEV_T *hdev, uint8_t ep_addr, uint8_t *buff, uint32_t len, void *callback)
+{
+    IFACE_T    *iface = (IFACE_T *)hdev->iface;
+    UTR_T      *utr;
+    EP_INFO_T  *ep;
+    int        i, ret;
+
+    if ((!iface) || (!iface->udev))
+        return HID_RET_DEV_NOT_FOUND;
+
+    if (ep_addr == 0)
+        ep = usbh_iface_find_ep(iface, 0, EP_ADDR_DIR_OUT | EP_ATTR_TT_INT);
+    else
+        ep = usbh_iface_find_ep(iface, ep_addr, 0);
+
+    if (ep == NULL)
+        return USBH_ERR_EP_NOT_FOUND;
+
+    for (i = 0; i < CONFIG_HID_DEV_MAX_PIPE; i++)
+    {
+        utr = hdev->utr_list[i];
+        if ((utr != NULL) && (utr->ep != NULL) && (utr->ep->bEndpointAddress == ep->bEndpointAddress))
+        {
+            //Pipe is busy, block until cleared
+            uint32_t t0 = get_ticks();
+            while (utr->bIsTransferDone == 0)
+            {
+                if (get_ticks() - t0 > (ep->bInterval * 10))
+                {
+                    return USBH_ERR_TIMEOUT;
+                }
+            }
+
+            //The transfer is done, free the transfer buffer and UTR.
+            if (utr->buff)
+                usbh_free_mem(utr->buff, utr->ep->wMaxPacketSize);
+            free_utr(utr);
+            hdev->utr_list[i] = NULL;
+        }
+    }
+    utr = alloc_utr(iface->udev);
+    if (!utr)
+        return USBH_ERR_MEMORY_OUT;
+
+    utr->buff = usbh_alloc_mem(ep->wMaxPacketSize);
+    if (utr->buff == NULL)
+    {
+        free_utr(utr);
+        return USBH_ERR_MEMORY_OUT;
+    }
+
+    utr->context = hdev;
+    utr->ep = ep;
+    utr->data_len = (len < ep->wMaxPacketSize) ? len : ep->wMaxPacketSize;
+    utr->xfer_len = 0;
+    utr->func = callback;
+    memcpy(utr->buff, buff, utr->data_len);
+
+    ret = usbh_int_xfer(utr);
+    if (ret < 0)
+    {
+        HID_DBGMSG("Error - failed to submit interrupt read request (%d)", ret);
+        usbh_free_mem(utr->buff, ep->wMaxPacketSize);
+        free_utr(utr);
+        return HID_RET_IO_ERR;
+    }
+
+    i = get_free_utr_slot(hdev);
+    if (i < 0)
+    {
+        HID_DBGMSG("Error - No free HID slot!\n");
+        usbh_quit_utr(utr);
+        usbh_free_mem(utr->buff, ep->wMaxPacketSize);
+        free_utr(utr);
+        return USBH_ERR_MEMORY_OUT;
+    }
+    else
+    {
+        hdev->utr_list[i] = utr;
+    }
+
+    return HID_RET_OK;
+}
+
 
 
 /*** (C) COPYRIGHT 2017 Nuvoton Technology Corp. ***/

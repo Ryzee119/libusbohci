@@ -8,6 +8,7 @@
  * @note
  * SPDX-License-Identifier: Apache-2.0
  * Copyright (C) 2017 Nuvoton Technology Corp. All rights reserved.
+ * Copyright (C) 2021 Ryan Wendland (remove FATFS requirement)
 *****************************************************************************/
 
 #include <stdio.h>
@@ -15,11 +16,9 @@
 #include <string.h>
 
 #include "N9H30.h"
-#include "diskio.h"                // FATFS header
 #include "usb.h"
-#include "msc.h"
-#include "ff.h"
-#include "diskio.h"
+#include "usbh_lib.h"
+#include "usbh_msc.h"
 
 
 /// @cond HIDDEN_SYMBOLS
@@ -28,49 +27,7 @@
 MSC_T  *g_msc_list;       /* Global list of Mass Storage Class device. A multi-lun device can have
                              several instances appeared with different lun. */
 
-static volatile uint8_t  g_fat_drv_used[USBDRV_CNT];
-static TCHAR    _path[3] = { '3', ':', 0 };
-
-static void  fatfs_drive_int()
-{
-    memset((uint8_t *)g_fat_drv_used, 0, sizeof(g_fat_drv_used));
-}
-
-static int fatfs_drive_alloc()
-{
-    int  i;
-
-    for (i = 0; i < USBDRV_CNT; i++)
-    {
-        if (g_fat_drv_used[i] == 0)
-        {
-            g_fat_drv_used[i] = 1;
-            return USBDRV_0+i;
-        }
-    }
-    msc_debug_msg("Memory out! No free FATFS USB drive slots!\n");
-    return USBH_ERR_MEMORY_OUT;
-}
-
-static void  fatfs_drive_free(int drv_no)
-{
-    _path[0] =  drv_no + '0';
-    f_mount(NULL, _path, 1);
-    g_fat_drv_used[drv_no-USBDRV_0] = 0;
-}
-
-static MSC_T * find_msc_by_drive(int drv_no)
-{
-    MSC_T  *msc = g_msc_list;
-
-    while (msc != NULL)
-    {
-        if (msc->drv_no == drv_no)
-            return msc;
-        msc = msc->next;
-    }
-    return NULL;
-}
+static MSC_CONN_FUNC *g_msc_conn_func, *g_msc_disconn_func;
 
 static void msc_list_add(MSC_T *msc)
 {
@@ -114,11 +71,11 @@ static void get_max_lun(MSC_T *msc)
 {
     UDEV_T    *udev = msc->iface->udev;
     uint32_t  read_len;
-    uint8_t   buff[2], *nbuff;
+    uint8_t   *nbuff;
     int       ret;
 
     msc->max_lun = 0;
-    nbuff = (uint8_t *)((uint32_t)buff | NON_CACHE_MASK);
+    nbuff = usbh_alloc_mem(2);
 
     /*------------------------------------------------------------------------------------*/
     /* Issue GET MAXLUN MSC class command to get the maximum lun number                   */
@@ -135,6 +92,7 @@ static void get_max_lun(MSC_T *msc)
     }
     msc->max_lun = nbuff[0];
     msc_debug_msg("Max lun is %d\n", msc->max_lun);
+    usbh_free_mem(nbuff, 2);
 }
 
 void msc_reset(MSC_T *msc)
@@ -171,7 +129,7 @@ static int  msc_inquiry(MSC_T *msc)
     cmd_blk->CDB[1]  = msc->lun << 5;
     cmd_blk->CDB[4]  = 36;
 
-    scsi_buff = (uint8_t *)((uint32_t)msc->scsi_buff | NON_CACHE_MASK);
+    scsi_buff = msc->scsi_buff;
     ret = run_scsi_command(msc, scsi_buff, 36, 1, 100);
     if (ret < 0)
     {
@@ -200,7 +158,7 @@ static int  msc_request_sense(MSC_T *msc)
     cmd_blk->CDB[1]  = msc->lun << 5;
     cmd_blk->CDB[4]  = 18;
 
-    scsi_buff = (uint8_t *)((uint32_t)msc->scsi_buff | NON_CACHE_MASK);
+    scsi_buff = msc->scsi_buff;
     ret = run_scsi_command(msc, scsi_buff, 18, 1, 100);
     if (ret < 0)
     {
@@ -251,7 +209,7 @@ static int  msc_test_unit_ready(MSC_T *msc)
 /**
   * @brief       Read a number of contiguous sectors from mass storage device.
   *
-  * @param[in]   drv_no    FATFS drive volume number.
+  * @param[in]   msc       MSC device pointer
   * @param[in]   sec_no    Sector number of the start secotr.
   * @param[in]   sec_cnt   Number of sectors to be read.
   * @param[out]  buff      Memory buffer to store data read from disk.
@@ -260,21 +218,19 @@ static int  msc_test_unit_ready(MSC_T *msc)
   * @retval      - \ref UMAS_ERR_DRIVE_NOT_FOUND   There's no mass storage device mounted to this volume.
   * @retval      - \ref UMAS_ERR_IO      Failed to read disk.
   */
-int  usbh_umas_read(int drv_no, uint32_t sec_no, int sec_cnt, uint8_t *buff)
+int  usbh_umas_read(MSC_T *msc, uint32_t sec_no, int sec_cnt, uint8_t *buff)
 {
-    MSC_T   *msc;
     struct bulk_cb_wrap  *cmd_blk;         /* MSC Bulk-only command block   */
     int   ret;
 
     msc_debug_msg("usbh_umas_read - %d, %d, 0x%x\n", sec_no, sec_cnt, (int)buff);
 
-    msc = find_msc_by_drive(drv_no);
     if (msc == NULL)
         return UMAS_ERR_DRIVE_NOT_FOUND;
 
     cmd_blk = &msc->cmd_blk;
 
-    //msc_debug_msg("read sector 0x%x\n", sector_no);
+    //msc_debug_msg("read sector 0x%x\n", sec_no);
     memset(cmd_blk, 0, sizeof(*cmd_blk));
 
     cmd_blk->Flags   = 0x80;
@@ -300,7 +256,7 @@ int  usbh_umas_read(int drv_no, uint32_t sec_no, int sec_cnt, uint8_t *buff)
 /**
   * @brief       Write a number of contiguous sectors to mass storage device.
   *
-  * @param[in]   drv_no    FATFS drive volume number.
+  * @param[in]   msc       HID device pointer
   * @param[in]   sec_no    Sector number of the start secotr.
   * @param[in]   sec_cnt   Number of sectors to be written.
   * @param[in]   buff      Memory buffer hold the data to be written..
@@ -309,15 +265,13 @@ int  usbh_umas_read(int drv_no, uint32_t sec_no, int sec_cnt, uint8_t *buff)
   * @retval      - \ref UMAS_ERR_DRIVE_NOT_FOUND   There's no mass storage device mounted to this volume.
   * @retval      - \ref UMAS_ERR_IO      Failed to write disk.
   */
-int  usbh_umas_write(int drv_no, uint32_t sec_no, int sec_cnt, uint8_t *buff)
+int  usbh_umas_write(MSC_T *msc, uint32_t sec_no, int sec_cnt, uint8_t *buff)
 {
-    MSC_T   *msc;
     struct bulk_cb_wrap  *cmd_blk;         /* MSC Bulk-only command block   */
     int   ret;
 
     //msc_debug_msg("usbh_umas_write - %d, %d\n", sec_no, sec_cnt);
 
-    msc = find_msc_by_drive(drv_no);
     if (msc == NULL)
         return UMAS_ERR_DRIVE_NOT_FOUND;
 
@@ -345,74 +299,17 @@ int  usbh_umas_write(int drv_no, uint32_t sec_no, int sec_cnt, uint8_t *buff)
 }
 
 /**
-  * @brief       Get information from USB disk volume.
-  *
-  * @param[in]   drv_no    FATFS drive volume number.
-  * @param[in]   cmd       FATFS disk ioctl command.
-  * @param[out]  buff      Memory buffer to store information.
-  *
-  * @retval      - \ref UMAS_OK              Mass storage device is ready.
-  * @retval      - \ref UMAS_ERR_DRIVE_NOT_FOUND   There's no mass storage device mounted to this volume.
-  * @retval      - \ref UMAS_ERR_IVALID_PARM       Failed to write disk.
-  */
-int  usbh_umas_ioctl(int drv_no, int cmd, void *buff)
-{
-    MSC_T   *msc;
-
-    msc = find_msc_by_drive(drv_no);
-    if (msc == NULL)
-        return UMAS_ERR_DRIVE_NOT_FOUND;
-
-    switch (cmd)
-    {
-    case CTRL_SYNC:
-        return RES_OK;
-
-    case GET_SECTOR_COUNT:
-        *(uint32_t *)buff = msc->uTotalSectorN;
-        return RES_OK;
-
-    case GET_SECTOR_SIZE:
-        *(uint32_t *)buff = msc->nSectorSize;
-        return RES_OK;
-
-    case GET_BLOCK_SIZE:
-        *(uint32_t *)buff = msc->nSectorSize;
-        return RES_OK;
-
-        //case CTRL_ERASE_SECTOR:
-        //    return RES_OK;
-    }
-    return UMAS_ERR_IVALID_PARM;
-}
-
-/**
- *  @brief    Get USB disk status of specified drive.
- *  @param[in] drv_no    USB disk drive number.
- *  @retval    0          Disk is ready.
- *  @retval    Otherwise  Disk not found or not ready.
- */
-int  usbh_umas_disk_status(int drv_no)
-{
-    if (find_msc_by_drive(drv_no) == NULL)
-        return STA_NODISK;
-    return 0;
-}
-
-/**
  *  @brief    Reset a connected USB mass storage device.
- *  @param[in] drv_no    USB disk drive number.
+ *  @param[in] msc        MSC device pointer
  *  @retval    0          Succes
  *  @retval    Otherwise  Failed
  */
-int  usbh_umas_reset_disk(int drv_no)
+int  usbh_umas_reset_disk(MSC_T *msc)
 {
-    MSC_T      *msc;
     UDEV_T     *udev;
 
     sysprintf("usbh_umas_reset_disk ...\n");
 
-    msc = find_msc_by_drive(drv_no);
     if (msc == NULL)
         return UMAS_ERR_DRIVE_NOT_FOUND;
 
@@ -423,7 +320,7 @@ int  usbh_umas_reset_disk(int drv_no)
     return 0;
 }
 
-static int  umass_init_device(MSC_T *msc)
+static int  umas_init_device(MSC_T *msc)
 {
     MSC_T     *try_msc = msc;
     struct bulk_cb_wrap  *cmd_blk;         /* MSC Bulk-only command block   */
@@ -500,21 +397,15 @@ disk_found:
         try_msc->nSectorSize = (scsi_buff[4] << 24) | (scsi_buff[5] << 16) |
                                (scsi_buff[6] << 8) | scsi_buff[7];
 
-        try_msc->drv_no = fatfs_drive_alloc();
-        if (try_msc->drv_no < 0)        /* should be failed, unless drive free slot is empty    */
-        {
-            ret = USBH_ERR_MEMORY_OUT;
-            break;
-        }
 
-        msc_debug_msg("USB disk [%c] found: size=%d MB, uTotalSectorN=%d\n", msc->drv_no+'0', try_msc->uTotalSectorN / 2048, try_msc->uTotalSectorN);
+        msc_debug_msg("USB disk found: size=%d MB, uTotalSectorN=%d\n", try_msc->uTotalSectorN / 2048, try_msc->uTotalSectorN);
 
         msc_list_add(try_msc);
 
-        _path[0] =  try_msc->drv_no + '0';
-        f_mount(&try_msc->fatfs_vol, _path, 1);
-        bHasMedia = 1;
+        if (g_msc_conn_func)
+            g_msc_conn_func(try_msc, 0);
 
+        bHasMedia = 1;
 
         /*
          *  duplicate another MSC for next try
@@ -565,6 +456,11 @@ static int msc_probe(IFACE_T *iface)
     msc = (MSC_T *)usbh_alloc_mem(sizeof(*msc));
     if (msc == NULL)
         return USBH_ERR_MEMORY_OUT;
+
+    msc->scsi_buff = usbh_alloc_mem(SCSI_BUFF_LEN);
+    if (msc->scsi_buff == NULL)
+        return USBH_ERR_MEMORY_OUT;
+
     msc->uid = get_ticks();
 
     /* Find the bulk in and out endpoints */
@@ -581,6 +477,7 @@ static int msc_probe(IFACE_T *iface)
 
     if ((msc->ep_bulk_in == NULL) || (msc->ep_bulk_out == NULL))
     {
+        usbh_free_mem(msc->scsi_buff, SCSI_BUFF_LEN);
         usbh_free_mem(msc, sizeof(*msc));
         return USBH_ERR_NOT_EXPECTED;
     }
@@ -591,7 +488,7 @@ static int msc_probe(IFACE_T *iface)
 
     get_max_lun(msc);
 
-    return umass_init_device(msc);
+    return umas_init_device(msc);
 }
 
 static void msc_disconnect(IFACE_T *iface)
@@ -617,12 +514,30 @@ static void msc_disconnect(IFACE_T *iface)
         msc_p = msc->next;
         if (msc->iface == iface)
         {
-            fatfs_drive_free(msc->drv_no);
+
+            if (g_msc_disconn_func)
+                g_msc_disconn_func(msc, 0);
+
             msc_list_remove(msc);
+            if (msc->scsi_buff)
+                usbh_free_mem(msc->scsi_buff, SCSI_BUFF_LEN);
             usbh_free_mem(msc, sizeof(*msc));
         }
         msc = msc_p;
     }
+}
+
+/**
+  * @brief    Install msc connect and disconnect callback function.
+  *
+  * @param[in]  conn_func       msc connect callback function.
+  * @param[in]  disconn_func    msc disconnect callback function.
+  * @return     None.
+  */
+void usbh_install_msc_conn_callback(MSC_CONN_FUNC *conn_func, MSC_CONN_FUNC *disconn_func)
+{
+    g_msc_conn_func = conn_func;
+    g_msc_disconn_func = disconn_func;
 }
 
 UDEV_DRV_T  msc_driver =
@@ -645,9 +560,23 @@ UDEV_DRV_T  msc_driver =
   */
 int  usbh_umas_init(void)
 {
-    fatfs_drive_int();
     g_msc_list = NULL;
+    g_msc_conn_func = NULL;
+    g_msc_disconn_func = NULL;
     return usbh_register_driver(&msc_driver);
+}
+
+/**
+ *  @brief   Get a list of currently connected USB MSC devices.
+ *  @return  A list MSC_T pointer reference to connected MSC devices.
+ *  @retval  NULL       There's no MSC device found.
+ *  @retval  Otherwise  A list of connected MSC devices.
+ *
+ *  The MSC devices are chained by the "next" member of MSC_T.
+ */
+MSC_T * usbh_msc_get_device_list(void)
+{
+    return g_msc_list;
 }
 
 

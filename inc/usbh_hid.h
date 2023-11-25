@@ -36,9 +36,10 @@ extern "C"
 /** @addtogroup N9H30_USBH_EXPORTED_CONSTANTS USB Host Exported Constants
   @{
 */
-
-#define CONFIG_HID_MAX_DEV          4      /*!< Maximum number of HID devices (interface) allowed at the same time.  */
-#define CONFIG_HID_DEV_MAX_PIPE     8      /*!< Maximum number of interrupt in/out pipes allowed per HID device      */
+#ifndef CONFIG_HID_MAX_DEV
+#define CONFIG_HID_MAX_DEV          8      /*!< Maximum number of HID devices (interface) allowed at the same time.  */
+#endif
+#define CONFIG_HID_DEV_MAX_PIPE     4      /*!< Maximum number of interrupt in/out pipes allowed per HID device      */
 
 /// @cond HIDDEN_SYMBOLS
 #define USB_DT_HID                  (REQ_TYPE_CLASS_DEV | 0x01)
@@ -82,6 +83,7 @@ typedef struct usbhid_dev
     void          *iface;               /*!< This HID interface                                */
     uint32_t      uid;                  /*!< The unique ID to identify a HID device.           */
     struct usbhid_dev   *next;          /*!< Point to the next HID device                      */
+    void *user_data;                    /*!< Pointer to an optional user struct                */
 } HID_DEV_T;                            /*! HID device structure                               */
 
 /*@}*/ /* end of group N9H30_USBH_EXPORTED_STRUCTURES */
